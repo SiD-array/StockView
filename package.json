@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "firebase": "^12.3.0",
+    "sklearn": "^1.0.0"
+  }
+}
