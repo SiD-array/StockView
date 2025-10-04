@@ -250,46 +250,43 @@ function App() {
   const anomalyData = useMemo(() => chartData.filter(d => d.anomaly), [chartData]);
 
   return (
-    <div className="min-h-screen bg-gray-100 p-2 sm:p-4 lg:p-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-center items-center mb-4 sm:mb-6 relative p-2 sm:p-4">
+    <div className="min-h-screen bg-gray-100 p-6">
+      <div className="flex justify-center items-center mb-6 relative p-4">
         <HelpModal />
         <button
           onClick={() => setViewMode(viewMode === "chart" ? "watchlist" : "chart")}
-          className="bg-yellow-500 text-white px-3 py-2 rounded-md hover:bg-yellow-600 absolute top-2 right-2 sm:top-3 sm:right-20 text-sm sm:text-base"
+          className="bg-yellow-500 text-white px-4 py-2 rounded-md hover:bg-yellow-600 absolute top-3 right-20"
         >
           {viewMode === "chart" ? "⭐ Watchlist" : "📊 Back to Chart"}
         </button>
-        <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-center text-blue-600 mt-8 sm:mt-0">
+        <h1 className="text-3xl font-bold text-center text-blue-600">
           📈 Stock Analysis Dashboard
         </h1>
       </div>
-      
-      {/* Main Content */}
-      <div className="flex flex-col xl:flex-row gap-4 p-2 sm:p-4 min-h-screen">
+      <div className="flex flex-col lg:flex-row gap-4 p-4 h-screen overflow-hidden">
 
         {/* Sidebar */}
-        <div className="w-full xl:w-1/4 bg-white p-3 sm:p-4 rounded-xl shadow-md space-y-3 sm:space-y-4 overflow-y-auto max-h-96 xl:max-h-full">
-          <h2 className="text-lg sm:text-xl font-semibold">📊 Stock Insights</h2>
-          <p className="text-sm sm:text-base">
+        <div className="w-full lg:w-1/4 bg-white p-4 rounded-xl shadow-md space-y-4 overflow-y-auto">
+          <h2 className="text-xl font-semibold">📊 Stock Insights</h2>
+          <p>
             This tool provides real-time stock visualization with interactive charts,
             zoom & pan, anomaly detection, and sentiment overlays.
           </p>
 
           <div>
-            <h3 className="text-sm sm:text-md font-medium mt-3 sm:mt-4">Popular Stocks</h3>
-            <div className="grid grid-cols-2 sm:grid-cols-1 gap-1 sm:gap-0">
-              <span className="text-xs sm:text-sm text-gray-700">AAPL – Apple</span>
-              <span className="text-xs sm:text-sm text-gray-700">MSFT – Microsoft</span>
-              <span className="text-xs sm:text-sm text-gray-700">GOOGL – Alphabet</span>
-              <span className="text-xs sm:text-sm text-gray-700">TSLA – Tesla</span>
-              <span className="text-xs sm:text-sm text-gray-700">AMZN – Amazon</span>
-            </div>
+            <h3 className="text-md font-medium mt-4">Popular Stocks</h3>
+            <ul className="list-disc list-inside text-sm text-gray-700">
+              <li>AAPL – Apple</li>
+              <li>MSFT – Microsoft</li>
+              <li>GOOGL – Alphabet</li>
+              <li>TSLA – Tesla</li>
+              <li>AMZN – Amazon</li>
+            </ul>
           </div>
 
           <div>
-            <h3 className="text-sm sm:text-md font-medium mt-3 sm:mt-4">Quick Tips</h3>
-            <ul className="list-disc list-inside text-xs sm:text-sm text-gray-700 space-y-1">
+            <h3 className="text-md font-medium mt-4">Quick Tips</h3>
+            <ul className="list-disc list-inside text-sm text-gray-700">
               <li>Enter a valid stock symbol to search</li>
               <li>Use zoom/pan to explore trends</li>
               <li>Watch out for sudden spikes (anomalies)</li>
@@ -297,13 +294,13 @@ function App() {
           </div>
 
           <div>
-            <h3 className="text-sm sm:text-md font-medium mt-3 sm:mt-4">Features</h3>
-            <ul className="list-disc list-inside text-xs sm:text-sm text-gray-700 space-y-1">
-              <li><b>SMA:</b> Moving averages for trend analysis</li>
-              <li><b>Anomaly Detection:</b> Unusual price movements</li>
-              <li><b>ML Predictions:</b> 5 advanced algorithms</li>
-              <li><b>Technical Indicators:</b> RSI, MACD, Bollinger Bands</li>
-              <li><b>Model Comparison:</b> Performance metrics</li>
+            <h3 className="text-md font-medium mt-4">Feature Info</h3>
+            <ul className="list-disc list-inside text-sm text-gray-700">
+              <li><b>SMA (Simple Moving Average):</b> Smooths short-term fluctuations to reveal trends.</li>
+              <li><b>Anomaly Detection:</b> Highlights unusual price movements with red markers.</li>
+              <li><b>Advanced ML Predictions:</b> Multiple algorithms (Random Forest, XGBoost, LightGBM, CNN) with technical indicators.</li>
+              <li><b>Technical Indicators:</b> RSI, MACD, Bollinger Bands, ATR, and more for comprehensive analysis.</li>
+              <li><b>Model Comparison:</b> Compare algorithm performance with R², MAE, and MSE metrics.</li>
             </ul>
           </div>
 
@@ -318,12 +315,12 @@ function App() {
         {viewMode === "chart" ? (
           <>
             {/* Chart Content */}
-            <div className="w-full xl:w-3/4 max-h-full overflow-auto bg-white p-3 sm:p-4 lg:p-6 rounded-xl shadow-md space-y-2">
+            <div className="w-full lg:w-3/4 max-h-full overflow-auto bg-white p-6 rounded-xl shadow-md space-y-2">
               {/* Search Bar */}
-              <div className="flex flex-col sm:flex-row gap-2 mb-4">
+              <div className="flex gap-2 mb-4">
                 <input
                   type="text"
-                  className="flex-1 border border-gray-300 p-2 sm:p-3 rounded-md text-sm sm:text-base"
+                  className="flex-1 border border-gray-300 p-2 rounded-md"
                   value={symbol}
                   placeholder="Enter stock symbol (e.g., AAPL)"
                   onChange={(e) => setSymbol(e.target.value.toUpperCase())}
@@ -335,7 +332,7 @@ function App() {
                 />
                 <button
                   onClick={handleSearch}
-                  className="bg-blue-600 text-white px-4 py-2 sm:py-3 rounded-md hover:bg-blue-700 text-sm sm:text-base font-medium"
+                  className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
                 >
                   Search
                 </button>
@@ -346,63 +343,65 @@ function App() {
               {error && (<p className="text-center text-red-500 text-sm">{error}</p>)}
 
               {data && (
-                <div className="flex flex-col sm:flex-row justify-center mt-2 gap-2 sm:gap-3">
-                  <select
-                    value={selectedAlgorithm}
-                    onChange={(e) => setSelectedAlgorithm(e.target.value)}
-                    className="px-3 py-2 border border-gray-300 rounded-md text-sm sm:text-base flex-1 sm:flex-none"
-                  >
-                    <option value="linear_regression">Linear Regression</option>
-                    <option value="random_forest">Random Forest</option>
-                    <option value="xgboost">XGBoost</option>
-                    <option value="lightgbm">LightGBM</option>
-                    <option value="cnn">CNN</option>
-                  </select>
-                  <button
-                    onClick={() => {
-                      if (!showPredictions) {
-                        fetchPredictions();
-                      }
-                      setShowPredictions(!showPredictions);
-                    }}
-                    className={`px-3 sm:px-4 py-2 rounded-md border text-sm sm:text-base ${showPredictions
-                      ? "bg-purple-600 text-white"
-                      : "bg-white text-purple-600 border-purple-600"
-                      }`}
-                  >
-                    {predictionLoading ? "Loading..." : showPredictions ? "Hide Predictions" : "Add Predictions"}
-                  </button>
-                  <button
-                    onClick={() => {
-                      if (!showComparison) {
-                        fetchAlgorithmComparison();
-                      }
-                      setShowComparison(!showComparison);
-                    }}
-                    className={`px-3 py-2 rounded-md border text-sm sm:text-base ${showComparison
-                      ? "bg-green-600 text-white"
-                      : "bg-white text-green-600 border-green-600"
-                      }`}
-                  >
-                    {showComparison ? "Hide Comparison" : "Compare Models"}
-                  </button>
+                <div className="flex justify-center mt-2 relative">
+                  <div className="flex gap-2 items-center">
+                    <select
+                      value={selectedAlgorithm}
+                      onChange={(e) => setSelectedAlgorithm(e.target.value)}
+                      className="px-3 py-2 border border-gray-300 rounded-md text-sm"
+                    >
+                      <option value="linear_regression">Linear Regression</option>
+                      <option value="random_forest">Random Forest</option>
+                      <option value="xgboost">XGBoost</option>
+                      <option value="lightgbm">LightGBM</option>
+                      <option value="cnn">CNN</option>
+                    </select>
+                    <button
+                      onClick={() => {
+                        if (!showPredictions) {
+                          fetchPredictions();
+                        }
+                        setShowPredictions(!showPredictions);
+                      }}
+                      className={`px-4 py-2 rounded-md border ${showPredictions
+                        ? "bg-purple-600 text-white"
+                        : "bg-white text-purple-600 border-purple-600"
+                        }`}
+                    >
+                      {predictionLoading ? "Loading..." : showPredictions ? "Hide Predictions" : "Add Predictions"}
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (!showComparison) {
+                          fetchAlgorithmComparison();
+                        }
+                        setShowComparison(!showComparison);
+                      }}
+                      className={`px-3 py-2 rounded-md border text-sm ${showComparison
+                        ? "bg-green-600 text-white"
+                        : "bg-white text-green-600 border-green-600"
+                        }`}
+                    >
+                      {showComparison ? "Hide Comparison" : "Compare Models"}
+                    </button>
+                  </div>
                 </div>
               )}
 
               {data && (
                 <div className="text-center">
-                  <h2 className="text-lg sm:text-xl lg:text-2xl font-bold mb-2">{data.company}</h2>
-                  <p className="text-base sm:text-lg text-green-600 transition-all duration-500 ease-in-out">Current Price: ${data.price}</p>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-5 mt-1 mb-3 font-semibold">
-                    <p className="text-xs sm:text-sm text-gray-700">Open: ${data.open}</p>
-                    <p className="text-xs sm:text-sm text-gray-700">High: ${data.high}</p>
-                    <p className="text-xs sm:text-sm text-gray-700">Low: ${data.low}</p>
-                    <p className="text-xs sm:text-sm text-gray-700">Volume: {data.volume.toLocaleString()}</p>
+                  <h2 className="text-2xl font-bold mb-2">{data.company}</h2>
+                  <p className="text-lg text-green-600 transition-all duration-500 ease-in-out">Current Price: ${data.price}</p>
+                  <div className="flex gap-5 mt-1 mb-3 justify-center font-semibold">
+                    <p className="text-sm text-gray-700">Open: ${data.open}</p>
+                    <p className="text-sm text-gray-700">High: ${data.high}</p>
+                    <p className="text-sm text-gray-700">Low: ${data.low}</p>
+                    <p className="text-sm text-gray-700">Volume: {data.volume.toLocaleString()}</p>
                   </div>
                 </div>
               )}
 
-              <div className="flex gap-1 sm:gap-2 justify-center mt-4 flex-wrap">
+              <div className="flex gap-2 justify-center mt-4 flex-wrap">
                 {[
                   { label: "1D", value: "1d", interval: "5m" },
                   { label: "5D", value: "5d", interval: "30m" },
@@ -416,7 +415,7 @@ function App() {
                       setRange({ value, interval });
                       fetchStock(symbol, value, interval);  // update chart immediately
                     }}
-                    className={`px-2 sm:px-3 py-1 sm:py-2 rounded-md border text-xs sm:text-sm ${range.value === value
+                    className={`px-3 py-1 rounded-md border ${range.value === value
                       ? "bg-blue-600 text-white"
                       : "bg-white text-blue-600 border-blue-600"
                       }`}
@@ -427,20 +426,14 @@ function App() {
               </div>
 
               {chartData.length > 0 && (
-                <div className="bg-white mt-4 p-2 sm:p-4 rounded-xl shadow-md w-full mx-auto">
-                  <h3 className="text-base sm:text-lg font-semibold text-center mb-2">Intraday Price Chart</h3>
-                  <ResponsiveContainer width="100%" height={200} className="sm:h-[250px]">
+                <div className="bg-white mt-4 p-4 rounded-xl shadow-md max-w-3xl mx-auto">
+                  <h3 className="text-lg font-semibold text-center mb-2">Intraday Price Chart</h3>
+                  <ResponsiveContainer width="100%" height={250}>
                     <LineChart data={showPredictions && predictions.length > 0 ? predictions : chartData}>
                       <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis 
-                        dataKey="time" 
-                        tick={{ fontSize: 8 }} 
-                        angle={-45} 
-                        textAnchor="end" 
-                        interval={chartData.length > 50 ? Math.floor(chartData.length / 10) : 0}
-                        className="text-xs"
-                      />
-                      <YAxis domain={['auto', 'auto']} tick={{ fontSize: 8 }} />
+                      <XAxis dataKey="time" tick={{ fontSize: 10 }} angle={-45} textAnchor="end" interval={chartData.length > 50 ? Math.floor(chartData.length / 10) : 0}>
+                      </XAxis>
+                      <YAxis domain={['auto', 'auto']} />
                       <Tooltip content={CustomTooltip} />
                       <Legend
                         formatter={(value) => {
@@ -569,26 +562,26 @@ function App() {
 
               {/* Algorithm Comparison Section */}
               {showComparison && algorithmComparison && (
-                <div className="bg-white mt-4 sm:mt-6 p-3 sm:p-4 rounded-xl shadow-md w-full mx-auto">
-                  <h3 className="text-base sm:text-lg font-semibold text-center mb-3 sm:mb-4">🔬 Algorithm Performance Comparison</h3>
+                <div className="bg-white mt-6 p-4 rounded-xl shadow-md max-w-4xl mx-auto">
+                  <h3 className="text-lg font-semibold text-center mb-4">🔬 Algorithm Performance Comparison</h3>
                   
-                  <div className="mb-3 sm:mb-4 p-2 sm:p-3 bg-green-50 border border-green-300 rounded-lg">
-                    <p className="text-green-800 text-xs sm:text-sm">
+                  <div className="mb-4 p-3 bg-green-50 border border-green-300 rounded-lg">
+                    <p className="text-green-800 text-sm">
                       <strong>Best Algorithm:</strong> {algorithmComparison.best_algorithm?.replace('_', ' ').toUpperCase()} 
                       (R² = {algorithmComparison.best_r2_score?.toFixed(3)})
                     </p>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {Object.entries(algorithmComparison.comparison).map(([algorithm, metrics]) => (
-                      <div key={algorithm} className="border border-gray-200 rounded-lg p-2 sm:p-3">
-                        <h4 className="font-semibold text-gray-800 mb-2 text-sm sm:text-base">
+                      <div key={algorithm} className="border border-gray-200 rounded-lg p-3">
+                        <h4 className="font-semibold text-gray-800 mb-2">
                           {algorithm.replace('_', ' ').toUpperCase()}
                         </h4>
                         {metrics.error ? (
-                          <p className="text-red-600 text-xs sm:text-sm">Error: {metrics.error}</p>
+                          <p className="text-red-600 text-sm">Error: {metrics.error}</p>
                         ) : (
-                          <div className="space-y-1 text-xs sm:text-sm">
+                          <div className="space-y-1 text-sm">
                             <div className="flex justify-between">
                               <span>R² Score:</span>
                               <span className={`font-medium ${metrics.r2 > 0.7 ? 'text-green-600' : metrics.r2 > 0.4 ? 'text-yellow-600' : 'text-red-600'}`}>
@@ -609,9 +602,9 @@ function App() {
                     ))}
                   </div>
 
-                  <div className="mt-3 sm:mt-4 p-2 sm:p-3 bg-blue-50 border border-blue-300 rounded-lg">
-                    <h5 className="font-semibold text-blue-800 mb-2 text-sm sm:text-base">📈 Algorithm Descriptions:</h5>
-                    <div className="text-xs sm:text-sm text-blue-700 space-y-1">
+                  <div className="mt-4 p-3 bg-blue-50 border border-blue-300 rounded-lg">
+                    <h5 className="font-semibold text-blue-800 mb-2">📈 Algorithm Descriptions:</h5>
+                    <div className="text-sm text-blue-700 space-y-1">
                       <p><strong>Linear Regression:</strong> Simple trend-based prediction using time as the only feature.</p>
                       <p><strong>Random Forest:</strong> Ensemble method using multiple decision trees with technical indicators.</p>
                       <p><strong>XGBoost:</strong> Gradient boosting algorithm optimized for performance and accuracy.</p>
@@ -625,8 +618,8 @@ function App() {
         ) : (
           <>
             {/* Watchlist Section */}
-            <div className="w-full xl:w-3/4 max-h-full overflow-auto bg-white p-3 sm:p-4 lg:p-6 rounded-xl shadow-md space-y-2">
-              <h3 className="text-base sm:text-lg font-semibold mb-3 sm:mb-4">⭐ Your Watchlist</h3>
+            <div className="w-full lg:w-3/4 max-h-full overflow-auto bg-white p-6 rounded-xl shadow-md space-y-2">
+              <h3 className="text-lg font-semibold mb-4">⭐ Your Watchlist</h3>
               <ul className="space-y-2">
                 {watchlist.map(item => (
                   <li
@@ -635,7 +628,7 @@ function App() {
                   >
                     {/* Clickable Symbol */}
                     <span
-                      className="font-medium text-blue-600 hover:underline text-sm sm:text-base"
+                      className="font-medium text-blue-600 hover:underline"
                       onClick={async () => {
                         // Clear old data first
                         setData(null);
@@ -680,7 +673,7 @@ function App() {
                         e.stopPropagation(); // prevent triggering the chart load
                         removeFromWatchlist(item.id);
                       }}
-                      className="text-red-500 text-xs sm:text-sm px-2 py-1 rounded hover:bg-red-50"
+                      className="text-red-500 text-sm"
                     >
                       Remove
                     </button>
@@ -690,11 +683,11 @@ function App() {
 
 
               {/* Watchlist Add Bar */}
-              <div className="flex flex-col sm:flex-row gap-2 mt-4">
+              <div className="flex gap-2 mt-4">
                 <input
                   type="text"
                   placeholder="Add symbol (e.g. AAPL)"
-                  className="flex-1 border border-gray-300 p-2 sm:p-3 rounded-md text-sm sm:text-base"
+                  className="flex-1 border border-gray-300 p-2 rounded-md"
                   onKeyDown={async (e) => {
                     if (e.key === "Enter") {
                       const symbol = e.target.value.trim().toUpperCase();
@@ -741,7 +734,7 @@ function App() {
                       alert("Error validating symbol. Please try again.");
                     }
                   }}
-                  className="bg-blue-600 text-white px-3 py-2 sm:py-3 rounded-md hover:bg-blue-700 text-sm sm:text-base font-medium"
+                  className="bg-blue-600 text-white px-3 py-1 rounded-md hover:bg-blue-700"
                 >
                   Add
                 </button>
@@ -768,22 +761,22 @@ function App() {
 
       {/* News & Sentiment Card */}
       {news.length > 0 && (
-        <div className="flex flex-col xl:flex-row gap-4 overflow-hidden p-2 sm:p-4">
-          <div className="bg-white p-3 sm:p-4 lg:p-7 rounded-xl shadow-md w-full">
-            <h3 className="text-base sm:text-lg font-semibold text-center mb-3 sm:mb-4">📰 News Sentiment & Headlines</h3>
+        <div className="flex flex-col lg:flex-row gap-4 overflow-hidden">
+          <div className="bg-white p-7 rounded-xl shadow-md mx-3 w-full">
+            <h3 className="text-lg font-semibold text-center mb-4">📰 News Sentiment & Headlines</h3>
 
-            <div className="flex flex-col xl:flex-row gap-4 sm:gap-6 p-2 sm:p-3">
+            <div className="flex flex-col lg:flex-row gap-6 p-3">
               {/* Left side: Sentiment Summary + Chart */}
-              <div className="w-full xl:w-1/2 space-y-3 sm:space-y-4 p-1 sm:p-2">
+              <div className="w-full lg:w-1/2 space-y-4 p-2">
                 {/* Sentiment Summary */}
-                <div className="flex justify-around text-xs sm:text-sm font-medium">
+                <div className="flex justify-around text-sm font-medium">
                   <span className="text-green-600">Positive: {news.filter(n => n.sentiment === "Positive").length}</span>
                   <span className="text-yellow-600">Neutral: {news.filter(n => n.sentiment === "Neutral").length}</span>
                   <span className="text-red-600">Negative: {news.filter(n => n.sentiment === "Negative").length}</span>
                 </div>
 
                 {/* Sentiment Chart */}
-                <ResponsiveContainer width="100%" height={200} className="sm:h-[250px]">
+                <ResponsiveContainer width="100%" height={250}>
                   <BarChart data={news.map(n => ({
                     time: new Date(n.published_at).toLocaleTimeString("en-US", {
                       hour: "2-digit",
@@ -814,17 +807,17 @@ function App() {
               </div>
 
               {/* Right side: Headlines List */}
-              <div className="w-full xl:w-1/2 p-1 sm:p-2">
-                <h4 className="text-sm sm:text-md font-semibold mb-2">Recent Headlines</h4>
-                <ul className="space-y-2 sm:space-y-3">
+              <div className="w-full lg:w-1/2 p-2">
+                <h4 className="text-md font-semibold mb-2">Recent Headlines</h4>
+                <ul className="space-y-3">
                   {news.map((article, idx) => (
-                    <li key={idx} className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b pb-2 gap-2">
-                      <div className="flex-1 min-w-0">
+                    <li key={idx} className="flex items-center justify-between border-b pb-2">
+                      <div className="flex-1">
                         <a
                           href={article.url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-blue-600 hover:underline font-medium text-xs sm:text-sm block truncate"
+                          className="text-blue-600 hover:underline font-medium"
                         >
                           {article.headline}
                         </a>
@@ -838,7 +831,7 @@ function App() {
                         </p>
                       </div>
                       <span
-                        className={`px-2 py-0.5 rounded-full text-xs font-semibold whitespace-nowrap ${article.sentiment === "Positive"
+                        className={`ml-2 px-2 py-0.5 rounded-full text-xs font-semibold ${article.sentiment === "Positive"
                           ? "bg-green-100 text-green-700"
                           : article.sentiment === "Negative"
                             ? "bg-red-100 text-red-700"
