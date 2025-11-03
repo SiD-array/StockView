@@ -21,6 +21,22 @@ import numpy as np  # pyright: ignore[reportMissingImports]
 import warnings
 warnings.filterwarnings('ignore')
 
+# Fix yfinance user-agent issue - patch to avoid chrome136 error
+# Set environment variable to disable user agent validation
+import os
+os.environ['YF_USER_AGENT'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+
+# Also patch yfinance utils if needed
+try:
+    import yfinance.utils as yf_utils
+    # Override the user agent headers
+    if hasattr(yf_utils, 'user_agent_headers'):
+        yf_utils.user_agent_headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        }
+except:
+    pass
+
 app = FastAPI()
 
 # Allow frontend to call backend
