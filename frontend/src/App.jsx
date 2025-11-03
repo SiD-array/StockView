@@ -145,11 +145,18 @@ function App() {
       setPredictions([]);
       setShowPredictions(false);
     } catch (err) {
-      setPopupMessage("⚠️ Stock symbol not found. Please enter a valid symbol.");
+      console.error('Search error:', err);
+      // Better error messages
+      if (err.message && err.message.includes('Network Error')) {
+        setPopupMessage(`⚠️ Cannot connect to backend API. Please check:\n1. Backend is running on Render\n2. VITE_API_URL is set in Vercel\n3. Backend URL: ${API_URL}`);
+      } else if (err.message && err.message.includes('404')) {
+        setPopupMessage("⚠️ Stock symbol not found. Please enter a valid symbol.");
+      } else {
+        setPopupMessage(`⚠️ Error: ${err.message || 'Unknown error occurred'}`);
+      }
       setShowPopup(true);
-      setError("Stock not found or API error" + err.message);
+      setError(err.message || "Stock not found or API error");
       setNews([]); // clear old news
-
     }
     setLoading(false);
   };
@@ -170,6 +177,12 @@ function App() {
 
   // Get API URL from environment or use localhost as fallback
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+  
+  // Debug: Log API URL (remove in production if needed)
+  useEffect(() => {
+    console.log('API URL:', API_URL);
+    console.log('Environment variable:', import.meta.env.VITE_API_URL);
+  }, []);
 
   const fetchStock = useCallback(async (symbolOverride = symbol, selectedRange = range.value, selectedInterval = range.interval) => {
     try {
@@ -180,10 +193,20 @@ function App() {
         fetch(`${API_URL}/history?symbol=${symbolOverride}&range=${selectedRange}&interval=${selectedInterval}`)
       ]);
 
-      if (!priceRes.ok || !chartRes.ok) {
+      if (!priceRes.ok) {
+        const errorText = await priceRes.text();
+        console.error('Price API error:', priceRes.status, errorText);
         setData(null);
         setChartData([]);
-        throw new Error("Stock not found");
+        throw new Error(`API Error: ${priceRes.status} - ${errorText || 'Stock not found'}`);
+      }
+
+      if (!chartRes.ok) {
+        const errorText = await chartRes.text();
+        console.error('Chart API error:', chartRes.status, errorText);
+        setData(null);
+        setChartData([]);
+        throw new Error(`API Error: ${chartRes.status} - ${errorText || 'Chart data not found'}`);
       }
 
       const newPrice = await priceRes.json();
@@ -208,9 +231,15 @@ function App() {
       setLastUpdate(new Date().toLocaleTimeString());
 
     } catch (err) {
-      setError(err.message || "Failed to fetch stock data");
+      console.error('Fetch stock error:', err);
+      // Check if it's a network error
+      if (err.name === 'TypeError' && err.message.includes('fetch')) {
+        setError(`Network Error: Cannot connect to backend at ${API_URL}. Please check if the backend is running and the VITE_API_URL is set correctly.`);
+      } else {
+        setError(err.message || "Failed to fetch stock data");
+      }
     }
-  }, [symbol, range.value, range.interval]);
+  }, [symbol, range.value, range.interval, API_URL]);
 
   const fetchPredictions = useCallback(async (symbolOverride = symbol, algorithm = selectedAlgorithm) => {
     setPredictionLoading(true);
