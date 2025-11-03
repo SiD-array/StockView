@@ -5,11 +5,11 @@ This guide will help you deploy your StockView application with advanced ML feat
 ## 📋 Prerequisites
 
 - GitHub account
-- Railway account (free tier)
+- Render account (free tier)
 - Vercel account (free tier)
 - Git installed on your machine
 
-## 🔧 Backend Deployment (Railway)
+## 🔧 Backend Deployment (Render)
 
 ### Step 1: Prepare Your Repository
 
@@ -30,34 +30,45 @@ This guide will help you deploy your StockView application with advanced ML feat
      git push -u origin main
      ```
 
-### Step 2: Deploy to Railway
+### Step 2: Deploy to Render
 
-1. **Sign up for Railway**:
-   - Go to [Railway.app](https://railway.app)
+1. **Sign up for Render**:
+   - Go to [Render.com](https://render.com)
    - Sign up with your GitHub account
 
-2. **Create New Project**:
-   - Click "New Project"
-   - Select "Deploy from GitHub repo"
-   - Choose your `stockview-ml` repository
-   - Select the `backend` folder as the root directory
+2. **Create New Web Service**:
+   - Click "New +" in the dashboard
+   - Select "Web Service"
+   - Choose "Build and deploy from a Git repository"
+   - Connect your GitHub account and select your `stockview-ml` repository
 
-3. **Configure Environment**:
-   - Railway will automatically detect it's a Python project
-   - The `railway.json` and `Procfile` will handle the deployment
-   - No additional configuration needed
+3. **Configure Service Settings**:
+   - **Name**: `stockview-backend` (or any name you prefer)
+   - **Region**: Choose closest to your users (e.g., `Oregon (US West)`)
+   - **Branch**: `main`
+   - **Root Directory**: Leave blank (or set to `backend` if using manual deployment)
+   - **Runtime**: `Python 3`
+   - **Build Command**: `pip install -r backend/requirements.txt`
+   - **Start Command**: `cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT`
+   - **Plan**: Select `Free` plan
 
-4. **Deploy**:
-   - Railway will automatically build and deploy your backend
-   - Wait for deployment to complete (5-10 minutes)
-   - Note down your backend URL (e.g., `https://your-app.railway.app`)
+4. **Alternative: Use render.yaml**:
+   - Render can auto-detect `render.yaml` in your repository
+   - The provided `render.yaml` will automatically configure your service
+   - Just select your repository and Render will use the configuration
+
+5. **Deploy**:
+   - Click "Create Web Service"
+   - Render will automatically build and deploy your backend
+   - Wait for deployment to complete (5-10 minutes for first build)
+   - Note down your backend URL (e.g., `https://stockview-backend.onrender.com`)
 
 ## 🎨 Frontend Deployment (Vercel)
 
 ### Step 1: Prepare Frontend
 
 1. **Update API Endpoints**:
-   - Replace `http://localhost:8000` with your Railway backend URL
+   - Replace `http://localhost:8000` with your Render backend URL
    - Update all API calls in `frontend/src/App.jsx`
 
 2. **Create Vercel Configuration**:
@@ -84,14 +95,14 @@ This guide will help you deploy your StockView application with advanced ML feat
 
 ### Update API Endpoints
 
-Replace all instances of `http://localhost:8000` in your frontend with your Railway backend URL:
+Replace all instances of `http://localhost:8000` in your frontend with your Render backend URL:
 
 ```javascript
 // In frontend/src/App.jsx, replace:
 const response = await fetch(`http://localhost:8000/predict?...`);
 
 // With:
-const response = await fetch(`https://your-backend.railway.app/predict?...`);
+const response = await fetch(`https://your-backend.onrender.com/predict?...`);
 ```
 
 ### Environment Variables (Optional)
@@ -100,7 +111,7 @@ For better security, you can use environment variables:
 
 1. **In Vercel**:
    - Go to your project settings
-   - Add environment variable: `REACT_APP_API_URL=https://your-backend.railway.app`
+   - Add environment variable: `REACT_APP_API_URL=https://your-backend.onrender.com`
 
 2. **In Frontend Code**:
    ```javascript
@@ -111,10 +122,10 @@ For better security, you can use environment variables:
 
 ### Backend Testing
 
-Test your Railway backend:
+Test your Render backend:
 ```bash
-curl https://your-backend.railway.app/
-curl https://your-backend.railway.app/predict?symbol=AAPL&algorithm=random_forest
+curl https://your-backend.onrender.com/
+curl https://your-backend.onrender.com/predict?symbol=AAPL&algorithm=random_forest
 ```
 
 ### Frontend Testing
@@ -126,11 +137,12 @@ curl https://your-backend.railway.app/predict?symbol=AAPL&algorithm=random_fores
 
 ## 📊 Free Tier Limits
 
-### Railway (Backend)
-- **Monthly Usage**: $5 credit (usually enough for small apps)
-- **Build Time**: 500 minutes/month
+### Render (Backend)
+- **Monthly Usage**: Free tier available
+- **Build Time**: 750 minutes/month
 - **Deployments**: Unlimited
-- **Sleep**: Apps sleep after 30 minutes of inactivity
+- **Sleep**: Apps sleep after 15 minutes of inactivity (free tier)
+- **Spin-up Time**: Free tier apps may take 30-50 seconds to spin up when sleeping
 
 ### Vercel (Frontend)
 - **Bandwidth**: 100GB/month
@@ -143,9 +155,10 @@ curl https://your-backend.railway.app/predict?symbol=AAPL&algorithm=random_fores
 ### Common Issues
 
 1. **Backend Not Starting**:
-   - Check Railway logs for errors
+   - Check Render logs for errors (available in the Render dashboard)
    - Ensure all dependencies are in `requirements.txt`
-   - Verify `Procfile` is correct
+   - Verify `Procfile` or `render.yaml` configuration is correct
+   - Check that `$PORT` environment variable is used (Render sets this automatically)
 
 2. **CORS Errors**:
    - Backend CORS is set to allow all origins
@@ -196,18 +209,21 @@ curl https://your-backend.railway.app/predict?symbol=AAPL&algorithm=random_fores
 ## 📞 Support
 
 If you encounter issues:
-1. Check Railway/Vercel logs
+1. Check Render/Vercel logs
 2. Review this deployment guide
 3. Test locally first
 4. Check GitHub issues for similar problems
+5. Verify render.yaml configuration is correct
 
 ## 🎉 Success!
 
 Once deployed, you'll have:
-- ✅ Backend API running on Railway
+- ✅ Backend API running on Render
 - ✅ Frontend app running on Vercel
 - ✅ Advanced ML predictions working
 - ✅ Algorithm comparison features
 - ✅ Free hosting with good performance
+
+**Note**: Render's free tier services spin down after 15 minutes of inactivity. The first request after spin-down may take 30-50 seconds to respond while the service starts up. This is normal for free tier hosting.
 
 Your StockView application is now live and accessible worldwide! 🌍
