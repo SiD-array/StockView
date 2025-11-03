@@ -497,7 +497,7 @@ def predict(symbol: str, period: str = "3mo", interval: str = "1d", steps: int =
             })
 
         # Format predicted data
-        last_date = data.index[-1]
+            last_date = data.index[-1]
         predicted = []
         for i, pred in enumerate(predictions):
             future_date = last_date + pd.Timedelta(days=i+1)
@@ -595,7 +595,7 @@ def compare_algorithms(symbol: str, period: str = "3mo", interval: str = "1d", s
             "best_algorithm": best_algo,
             "best_r2_score": best_r2
         }
-        
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
