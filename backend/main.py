@@ -21,35 +21,8 @@ import numpy as np  # pyright: ignore[reportMissingImports]
 import warnings
 warnings.filterwarnings('ignore')
 
-# Fix yfinance user-agent issue - patch to avoid chrome136 error
-import os
-# Set compatible user agent before importing yfinance
-os.environ['YF_USER_AGENT'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-
-# Patch yfinance to use compatible user agent
-try:
-    import yfinance.utils as yf_utils
-    # Override user agent headers
-    if hasattr(yf_utils, 'user_agent_headers'):
-        yf_utils.user_agent_headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-        }
-    
-    # Patch the _get_user_agent function if it exists
-    if hasattr(yf_utils, '_get_user_agent'):
-        def _patched_get_user_agent():
-            return 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-        yf_utils._get_user_agent = _patched_get_user_agent
-    
-    # Patch requests session to use our user agent
-    import yfinance.base as yf_base
-    if hasattr(yf_base, '_get_user_agent'):
-        def _patched_base_get_user_agent():
-            return 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-        yf_base._get_user_agent = _patched_base_get_user_agent
-except Exception as e:
-    # If patching fails, continue anyway - might work with environment variable
-    pass
+# yfinance 0.2.65 works with requests library (no curl_cffi needed)
+# This version was working on Railway, so we'll stick with it
 
 app = FastAPI()
 
