@@ -22,19 +22,33 @@ import warnings
 warnings.filterwarnings('ignore')
 
 # Fix yfinance user-agent issue - patch to avoid chrome136 error
-# Set environment variable to disable user agent validation
 import os
+# Set compatible user agent before importing yfinance
 os.environ['YF_USER_AGENT'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
 
-# Also patch yfinance utils if needed
+# Patch yfinance to use compatible user agent
 try:
     import yfinance.utils as yf_utils
-    # Override the user agent headers
+    # Override user agent headers
     if hasattr(yf_utils, 'user_agent_headers'):
         yf_utils.user_agent_headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
         }
-except:
+    
+    # Patch the _get_user_agent function if it exists
+    if hasattr(yf_utils, '_get_user_agent'):
+        def _patched_get_user_agent():
+            return 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        yf_utils._get_user_agent = _patched_get_user_agent
+    
+    # Patch requests session to use our user agent
+    import yfinance.base as yf_base
+    if hasattr(yf_base, '_get_user_agent'):
+        def _patched_base_get_user_agent():
+            return 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        yf_base._get_user_agent = _patched_base_get_user_agent
+except Exception as e:
+    # If patching fails, continue anyway - might work with environment variable
     pass
 
 app = FastAPI()
@@ -265,7 +279,13 @@ def train_cnn(X, y, sequence_length=10):
 @app.get("/price")
 def get_price(symbol: str):
     try:
-        stock = yf.Ticker(symbol)
+        # Create Ticker with custom session to avoid chrome136 error
+        import requests
+        session = requests.Session()
+        session.headers.update({
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        })
+        stock = yf.Ticker(symbol, session=session)
         data = stock.history(period="1d")
         info = stock.info
         company_name = info.get("longName", symbol)
@@ -288,7 +308,12 @@ def get_price(symbol: str):
 @app.get("/history")
 def get_history(symbol: str, range: str = "1d", interval: str = "5m"):
     try:
-        stock = yf.Ticker(symbol)
+        # Create Ticker with custom session to avoid chrome136 error
+        session = requests.Session()
+        session.headers.update({
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        })
+        stock = yf.Ticker(symbol, session=session)
         data = stock.history(period=range, interval=interval)
         if data.empty:
             raise HTTPException(status_code=404, detail="No chart data found.")
@@ -550,7 +575,12 @@ def get_feature_importance(model, feature_cols, algorithm):
 def compare_algorithms(symbol: str, period: str = "3mo", interval: str = "1d", steps: int = 5):
     """Compare all available algorithms and return their performance metrics"""
     try:
-        stock = yf.Ticker(symbol)
+        # Create Ticker with custom session to avoid chrome136 error
+        session = requests.Session()
+        session.headers.update({
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        })
+        stock = yf.Ticker(symbol, session=session)
         data = stock.history(period=period, interval=interval)
 
         if data.empty:
