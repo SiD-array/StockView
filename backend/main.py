@@ -427,7 +427,12 @@ def predict(symbol: str, period: str = "3mo", interval: str = "1d", steps: int =
         algorithm: Algorithm to use (linear_regression, random_forest, xgboost, lightgbm, cnn)
     """
     try:
-        stock = yf.Ticker(symbol)
+        # Create Ticker with custom session to avoid chrome136 error
+        session = requests.Session()
+        session.headers.update({
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        })
+        stock = yf.Ticker(symbol, session=session)
         data = stock.history(period=period, interval=interval)
 
         if data.empty:
