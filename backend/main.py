@@ -279,13 +279,8 @@ def train_cnn(X, y, sequence_length=10):
 @app.get("/price")
 def get_price(symbol: str):
     try:
-        # Create Ticker with custom session to avoid chrome136 error
-        import requests
-        session = requests.Session()
-        session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-        })
-        stock = yf.Ticker(symbol, session=session)
+        # Let yfinance handle session automatically (requires curl_cffi)
+        stock = yf.Ticker(symbol)
         data = stock.history(period="1d")
         info = stock.info
         company_name = info.get("longName", symbol)
@@ -308,12 +303,8 @@ def get_price(symbol: str):
 @app.get("/history")
 def get_history(symbol: str, range: str = "1d", interval: str = "5m"):
     try:
-        # Create Ticker with custom session to avoid chrome136 error
-        session = requests.Session()
-        session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-        })
-        stock = yf.Ticker(symbol, session=session)
+        # Let yfinance handle session automatically (requires curl_cffi)
+        stock = yf.Ticker(symbol)
         data = stock.history(period=range, interval=interval)
         if data.empty:
             raise HTTPException(status_code=404, detail="No chart data found.")
@@ -580,12 +571,8 @@ def get_feature_importance(model, feature_cols, algorithm):
 def compare_algorithms(symbol: str, period: str = "3mo", interval: str = "1d", steps: int = 5):
     """Compare all available algorithms and return their performance metrics"""
     try:
-        # Create Ticker with custom session to avoid chrome136 error
-        session = requests.Session()
-        session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-        })
-        stock = yf.Ticker(symbol, session=session)
+        # Let yfinance handle session automatically (requires curl_cffi)
+        stock = yf.Ticker(symbol)
         data = stock.history(period=period, interval=interval)
 
         if data.empty:
