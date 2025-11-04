@@ -21,12 +21,45 @@ from fastapi.responses import JSONResponse # type: ignore
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer # type: ignore
 
 # Prevent curl_cffi from being imported/used by yfinance
+# We need to mock it properly so yfinance falls back to requests
 import sys
-class MockCurlCffi:
-    """Mock curl_cffi to prevent yfinance from using it"""
-    pass
-sys.modules['curl_cffi'] = MockCurlCffi()
-sys.modules['curl_cffi.requests'] = MockCurlCffi()
+import types
+
+# Create a mock requests module that redirects to the real requests library
+class MockCurlCffiRequests:
+    """Mock curl_cffi.requests that redirects to real requests"""
+    def __init__(self):
+        # Import requests here to avoid circular import
+        import requests as real_requests
+        self._real_requests = real_requests
+        
+    def __getattr__(self, name):
+        # Redirect all attribute access to real requests
+        return getattr(self._real_requests, name)
+    
+    def Session(self, *args, **kwargs):
+        # Redirect Session() calls to real requests
+        return self._real_requests.Session(*args, **kwargs)
+
+# Create a proper mock module that handles the import pattern
+class MockCurlCffiModule(types.ModuleType):
+    """Mock curl_cffi module that redirects to requests"""
+    def __init__(self):
+        super().__init__('curl_cffi')
+        self.requests = MockCurlCffiRequests()
+    
+    def __getattr__(self, name):
+        # For any other attributes, return the requests equivalent
+        if name == 'requests':
+            return self.requests
+        # Try to get it from requests module
+        import requests
+        return getattr(requests, name, None)
+
+# Set up the mock before importing yfinance
+curl_cffi_mock = MockCurlCffiModule()
+sys.modules['curl_cffi'] = curl_cffi_mock
+sys.modules['curl_cffi.requests'] = curl_cffi_mock.requests
 
 import yfinance as yf # type: ignore
 import pandas as pd # type: ignore
