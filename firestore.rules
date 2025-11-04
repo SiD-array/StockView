@@ -1,0 +1,15 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Allow read/write access to watchlist collection for all users
+    // Note: For production, consider adding authentication checks
+    match /watchlist/{document} {
+      allow read, write: if true;
+    }
+    
+    // Default deny rule for other collections
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

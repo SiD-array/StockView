@@ -1,3 +1,7 @@
+import os
+# Disable curl_cffi BEFORE importing yfinance to prevent browser impersonation errors
+os.environ['YFINANCE_DISABLE_CURL_CFFI'] = '1'
+
 import requests # type: ignore
 from sklearn.linear_model import LinearRegression # type: ignore
 from sklearn.ensemble import RandomForestRegressor # type: ignore
@@ -15,14 +19,20 @@ from fastapi import FastAPI, HTTPException # type: ignore
 from fastapi.middleware.cors import CORSMiddleware # type: ignore
 from fastapi.responses import JSONResponse # type: ignore
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer # type: ignore
+
+# Prevent curl_cffi from being imported/used by yfinance
+import sys
+class MockCurlCffi:
+    """Mock curl_cffi to prevent yfinance from using it"""
+    pass
+sys.modules['curl_cffi'] = MockCurlCffi()
+sys.modules['curl_cffi.requests'] = MockCurlCffi()
+
 import yfinance as yf # type: ignore
 import pandas as pd # type: ignore
 import numpy as np  # pyright: ignore[reportMissingImports]
 import warnings
 warnings.filterwarnings('ignore')
-
-# yfinance 0.2.65 works with requests library (no curl_cffi needed)
-# This version was working on Railway, so we'll stick with it
 
 app = FastAPI()
 
@@ -252,8 +262,8 @@ def train_cnn(X, y, sequence_length=10):
 @app.get("/price")
 def get_price(symbol: str):
     try:
-        # Let yfinance handle session automatically (requires curl_cffi)
-        stock = yf.Ticker(symbol)
+        # Use requests session to avoid curl_cffi browser impersonation issues
+        stock = yf.Ticker(symbol, session=requests.Session())
         data = stock.history(period="1d")
         info = stock.info
         company_name = info.get("longName", symbol)
@@ -276,8 +286,8 @@ def get_price(symbol: str):
 @app.get("/history")
 def get_history(symbol: str, range: str = "1d", interval: str = "5m"):
     try:
-        # Let yfinance handle session automatically (requires curl_cffi)
-        stock = yf.Ticker(symbol)
+        # Use requests session to avoid curl_cffi browser impersonation issues
+        stock = yf.Ticker(symbol, session=requests.Session())
         data = stock.history(period=range, interval=interval)
         if data.empty:
             raise HTTPException(status_code=404, detail="No chart data found.")
@@ -391,8 +401,8 @@ def predict(symbol: str, period: str = "3mo", interval: str = "1d", steps: int =
         algorithm: Algorithm to use (linear_regression, random_forest, xgboost, lightgbm, cnn)
     """
     try:
-        # Let yfinance handle session automatically (requires curl_cffi)
-        stock = yf.Ticker(symbol)
+        # Use requests session to avoid curl_cffi browser impersonation issues
+        stock = yf.Ticker(symbol, session=requests.Session())
         data = stock.history(period=period, interval=interval)
 
         if data.empty:
@@ -540,8 +550,8 @@ def get_feature_importance(model, feature_cols, algorithm):
 def compare_algorithms(symbol: str, period: str = "3mo", interval: str = "1d", steps: int = 5):
     """Compare all available algorithms and return their performance metrics"""
     try:
-        # Let yfinance handle session automatically (requires curl_cffi)
-        stock = yf.Ticker(symbol)
+        # Use requests session to avoid curl_cffi browser impersonation issues
+        stock = yf.Ticker(symbol, session=requests.Session())
         data = stock.history(period=period, interval=interval)
 
         if data.empty:
