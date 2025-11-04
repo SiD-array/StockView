@@ -21,40 +21,44 @@ from fastapi.responses import JSONResponse # type: ignore
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer # type: ignore
 
 # Prevent curl_cffi from being imported/used by yfinance
-# We need to mock it properly so yfinance falls back to requests
+# Mock curl_cffi.requests to redirect to real requests library
 import sys
 import types
 
-# Create a mock requests module that redirects to the real requests library
-class MockCurlCffiRequests:
-    """Mock curl_cffi.requests that redirects to real requests"""
+# Create a mock that fully mimics curl_cffi.requests but uses real requests
+class MockCurlCffiRequests(types.ModuleType):
+    """Mock curl_cffi.requests that redirects everything to real requests"""
     def __init__(self):
+        super().__init__('curl_cffi.requests')
         # Import requests here to avoid circular import
         import requests as real_requests
+        # Store reference to real requests module
         self._real_requests = real_requests
+        # Expose common attributes directly
+        self.Session = real_requests.Session
+        self.get = real_requests.get
+        self.post = real_requests.post
+        self.put = real_requests.put
+        self.delete = real_requests.delete
+        self.patch = real_requests.patch
+        self.head = real_requests.head
+        self.options = real_requests.options
         
     def __getattr__(self, name):
-        # Redirect all attribute access to real requests
+        # Redirect all other attribute access to real requests module
         return getattr(self._real_requests, name)
-    
-    def Session(self, *args, **kwargs):
-        # Redirect Session() calls to real requests
-        return self._real_requests.Session(*args, **kwargs)
 
-# Create a proper mock module that handles the import pattern
+# Create a mock curl_cffi module
 class MockCurlCffiModule(types.ModuleType):
-    """Mock curl_cffi module that redirects to requests"""
+    """Mock curl_cffi module"""
     def __init__(self):
         super().__init__('curl_cffi')
         self.requests = MockCurlCffiRequests()
     
     def __getattr__(self, name):
-        # For any other attributes, return the requests equivalent
         if name == 'requests':
             return self.requests
-        # Try to get it from requests module
-        import requests
-        return getattr(requests, name, None)
+        raise AttributeError(f"module 'curl_cffi' has no attribute '{name}'")
 
 # Set up the mock before importing yfinance
 curl_cffi_mock = MockCurlCffiModule()
