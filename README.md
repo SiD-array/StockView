@@ -5,7 +5,7 @@
 🚀 **Live Deployment**:
 
 * **Frontend (Vercel)** → [View App](https://stock-view-five.vercel.app/)
-* **Backend (Railway)**
+* **Backend (Render)** → See `DEPLOYMENT_COMPLETE_GUIDE.md` for deployment instructions
 
 ---
 
@@ -80,6 +80,17 @@ StockView/
 </p>
 
 > Replace the placeholder images above with actual screenshots of your app for a better showcase.
+
+---
+
+## 🚀 Deployment
+
+For complete deployment instructions, see **[DEPLOYMENT_COMPLETE_GUIDE.md](DEPLOYMENT_COMPLETE_GUIDE.md)**
+
+**Quick Overview:**
+- **Backend**: Deploy to Render (see guide for details)
+- **Frontend**: Deploy to Vercel (see guide for details)
+- **Firestore**: Configure security rules in Firebase Console
 
 ---
 
