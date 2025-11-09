@@ -285,8 +285,8 @@ def train_cnn(X, y, sequence_length=10):
 @app.get("/price")
 def get_price(symbol: str):
     try:
-        # Use requests session to avoid curl_cffi browser impersonation issues
-        stock = yf.Ticker(symbol, session=real_requests.Session())
+        # yfinance will use our curl_cffi mock which redirects to real requests
+        stock = yf.Ticker(symbol)
         data = stock.history(period="1d")
         info = stock.info
         company_name = info.get("longName", symbol)
@@ -309,8 +309,8 @@ def get_price(symbol: str):
 @app.get("/history")
 def get_history(symbol: str, range: str = "1d", interval: str = "5m"):
     try:
-        # Use requests session to avoid curl_cffi browser impersonation issues
-        stock = yf.Ticker(symbol, session=real_requests.Session())
+        # yfinance will use our curl_cffi mock which redirects to real requests
+        stock = yf.Ticker(symbol)
         data = stock.history(period=range, interval=interval)
         if data.empty:
             raise HTTPException(status_code=404, detail="No chart data found.")
@@ -424,8 +424,8 @@ def predict(symbol: str, period: str = "3mo", interval: str = "1d", steps: int =
         algorithm: Algorithm to use (linear_regression, random_forest, xgboost, lightgbm, cnn)
     """
     try:
-        # Use requests session to avoid curl_cffi browser impersonation issues
-        stock = yf.Ticker(symbol, session=real_requests.Session())
+        # yfinance will use our curl_cffi mock which redirects to real requests
+        stock = yf.Ticker(symbol)
         data = stock.history(period=period, interval=interval)
 
         if data.empty:
@@ -573,8 +573,8 @@ def get_feature_importance(model, feature_cols, algorithm):
 def compare_algorithms(symbol: str, period: str = "3mo", interval: str = "1d", steps: int = 5):
     """Compare all available algorithms and return their performance metrics"""
     try:
-        # Use requests session to avoid curl_cffi browser impersonation issues
-        stock = yf.Ticker(symbol, session=real_requests.Session())
+        # yfinance will use our curl_cffi mock which redirects to real requests
+        stock = yf.Ticker(symbol)
         data = stock.history(period=period, interval=interval)
 
         if data.empty:
