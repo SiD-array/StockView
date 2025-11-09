@@ -44,7 +44,15 @@ class MockCurlCffiRequests(types.ModuleType):
     
     def __getattr__(self, name):
         # Fallback for any other attributes
-        return getattr(real_requests, name)
+        try:
+            return getattr(real_requests, name)
+        except AttributeError:
+            raise AttributeError(f"module 'curl_cffi.requests' has no attribute '{name}'")
+    
+    def __call__(self, *args, **kwargs):
+        # If someone tries to call curl_cffi.requests as a function, raise an error
+        # This should not happen, but if it does, we want a clear error
+        raise TypeError("'curl_cffi.requests' is a module, not a function. Use curl_cffi.requests.Session() instead.")
 
 # Create mock curl_cffi module
 class MockCurlCffiModule(types.ModuleType):
@@ -326,6 +334,14 @@ def train_cnn(X, y, sequence_length=10):
 @app.get("/price")
 def get_price(symbol: str):
     try:
+        # Verify mock is still working before using yfinance
+        if not hasattr(sys.modules.get('curl_cffi', None), 'requests'):
+            raise RuntimeError("curl_cffi.requests mock not found")
+        if not hasattr(sys.modules['curl_cffi'].requests, 'Session'):
+            raise RuntimeError("Session not found in curl_cffi.requests")
+        if not isinstance(sys.modules['curl_cffi'].requests.Session, type):
+            raise RuntimeError(f"Session is not a class: {type(sys.modules['curl_cffi'].requests.Session)}")
+        
         # yfinance will use our curl_cffi mock which redirects to real requests
         stock = yf.Ticker(symbol)
         data = stock.history(period="1d")
@@ -345,7 +361,13 @@ def get_price(symbol: str):
             "volume": int(latest["Volume"]),
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        # Log the full error for debugging
+        import traceback
+        error_detail = str(e)
+        error_traceback = traceback.format_exc()
+        print(f"Error in get_price: {error_detail}")
+        print(f"Traceback: {error_traceback}")
+        raise HTTPException(status_code=500, detail=error_detail)
     
 @app.get("/history")
 def get_history(symbol: str, range: str = "1d", interval: str = "5m"):
@@ -406,7 +428,13 @@ def get_history(symbol: str, range: str = "1d", interval: str = "5m"):
 
         return chart_data
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        # Log the full error for debugging
+        import traceback
+        error_detail = str(e)
+        error_traceback = traceback.format_exc()
+        print(f"Error in get_price: {error_detail}")
+        print(f"Traceback: {error_traceback}")
+        raise HTTPException(status_code=500, detail=error_detail)
     
 @app.get("/news")
 def get_news(symbol: str, limit: int = 5):
@@ -450,7 +478,13 @@ def get_news(symbol: str, limit: int = 5):
         return {"symbol": symbol, "news": news_data}
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        # Log the full error for debugging
+        import traceback
+        error_detail = str(e)
+        error_traceback = traceback.format_exc()
+        print(f"Error in get_price: {error_detail}")
+        print(f"Traceback: {error_traceback}")
+        raise HTTPException(status_code=500, detail=error_detail)
     
 @app.get("/predict")
 def predict(symbol: str, period: str = "3mo", interval: str = "1d", steps: int = 5, algorithm: str = "random_forest"):
@@ -595,7 +629,13 @@ def predict(symbol: str, period: str = "3mo", interval: str = "1d", steps: int =
         }
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        # Log the full error for debugging
+        import traceback
+        error_detail = str(e)
+        error_traceback = traceback.format_exc()
+        print(f"Error in get_price: {error_detail}")
+        print(f"Traceback: {error_traceback}")
+        raise HTTPException(status_code=500, detail=error_detail)
 
 def get_feature_importance(model, feature_cols, algorithm):
     """Get feature importance for tree-based models"""
@@ -678,4 +718,10 @@ def compare_algorithms(symbol: str, period: str = "3mo", interval: str = "1d", s
         }
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        # Log the full error for debugging
+        import traceback
+        error_detail = str(e)
+        error_traceback = traceback.format_exc()
+        print(f"Error in get_price: {error_detail}")
+        print(f"Traceback: {error_traceback}")
+        raise HTTPException(status_code=500, detail=error_detail)
