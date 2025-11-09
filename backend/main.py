@@ -34,14 +34,20 @@ class MockCurlCffiRequests(types.ModuleType):
         import requests as real_requests
         # Store reference
         self._real_requests = real_requests
+        # Directly expose Session and common methods as attributes
+        # This ensures they're accessible without going through __getattribute__
+        self.Session = real_requests.Session
+        self.get = real_requests.get
+        self.post = real_requests.post
+        self.put = real_requests.put
+        self.delete = real_requests.delete
+        self.patch = real_requests.patch
+        self.head = real_requests.head
+        self.options = real_requests.options
         
-    def __getattribute__(self, name):
-        # For special attributes, use normal lookup
-        if name.startswith('_'):
-            return super().__getattribute__(name)
-        # For all other attributes, redirect to real requests
-        real_requests = super().__getattribute__('_real_requests')
-        return getattr(real_requests, name)
+    def __getattr__(self, name):
+        # For any other attributes, redirect to real requests
+        return getattr(self._real_requests, name)
     
     def __call__(self, *args, **kwargs):
         # If someone tries to call curl_cffi.requests as a function, redirect
