@@ -2,7 +2,38 @@ import os
 # Disable curl_cffi BEFORE importing yfinance to prevent browser impersonation errors
 os.environ['YFINANCE_DISABLE_CURL_CFFI'] = '1'
 
-import requests # type: ignore
+import sys
+import types
+
+# CRITICAL FIX: Import requests first, before creating any mocks
+import requests as real_requests
+
+# Create a mock requests module that redirects to real requests
+class MockCurlCffiRequests(types.ModuleType):
+    """Mock curl_cffi.requests that redirects everything to real requests"""
+    def __init__(self):
+        super().__init__('curl_cffi.requests')
+        # Copy all attributes from real requests module
+        for attr in dir(real_requests):
+            if not attr.startswith('_'):
+                try:
+                    setattr(self, attr, getattr(real_requests, attr))
+                except AttributeError:
+                    pass
+
+# Create mock curl_cffi module
+class MockCurlCffiModule(types.ModuleType):
+    """Mock curl_cffi module"""
+    def __init__(self):
+        super().__init__('curl_cffi')
+        self.requests = MockCurlCffiRequests()
+
+# Set up the mock before importing yfinance
+curl_cffi_mock = MockCurlCffiModule()
+sys.modules['curl_cffi'] = curl_cffi_mock
+sys.modules['curl_cffi.requests'] = curl_cffi_mock.requests
+
+# Now import other dependencies
 from sklearn.linear_model import LinearRegression # type: ignore
 from sklearn.ensemble import RandomForestRegressor # type: ignore
 from sklearn.model_selection import train_test_split # type: ignore
@@ -19,60 +50,6 @@ from fastapi import FastAPI, HTTPException # type: ignore
 from fastapi.middleware.cors import CORSMiddleware # type: ignore
 from fastapi.responses import JSONResponse # type: ignore
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer # type: ignore
-
-# Prevent curl_cffi from being imported/used by yfinance
-# Completely block curl_cffi and force yfinance to use requests
-import sys
-import types
-
-# Create a mock requests module that redirects to real requests
-class MockCurlCffiRequests(types.ModuleType):
-    """Mock curl_cffi.requests that redirects everything to real requests"""
-    def __init__(self):
-        super().__init__('curl_cffi.requests')
-        # Import requests module
-        import requests as real_requests
-        # Store reference
-        self._real_requests = real_requests
-        # Directly expose Session and common methods as attributes
-        # This ensures they're accessible without going through __getattribute__
-        self.Session = real_requests.Session
-        self.get = real_requests.get
-        self.post = real_requests.post
-        self.put = real_requests.put
-        self.delete = real_requests.delete
-        self.patch = real_requests.patch
-        self.head = real_requests.head
-        self.options = real_requests.options
-        
-    def __getattr__(self, name):
-        # For any other attributes, redirect to real requests
-        return getattr(self._real_requests, name)
-    
-    def __call__(self, *args, **kwargs):
-        # If someone tries to call curl_cffi.requests as a function, redirect
-        return self._real_requests(*args, **kwargs)
-
-# Create mock curl_cffi module
-class MockCurlCffiModule(types.ModuleType):
-    """Mock curl_cffi module"""
-    def __init__(self):
-        super().__init__('curl_cffi')
-        # Create requests mock
-        self._requests_mock = MockCurlCffiRequests()
-    
-    def __getattribute__(self, name):
-        # For special attributes, use normal lookup
-        if name.startswith('_'):
-            return super().__getattribute__(name)
-        if name == 'requests':
-            return super().__getattribute__('_requests_mock')
-        raise AttributeError(f"module 'curl_cffi' has no attribute '{name}'")
-
-# Set up the mock before importing yfinance
-curl_cffi_mock = MockCurlCffiModule()
-sys.modules['curl_cffi'] = curl_cffi_mock
-sys.modules['curl_cffi.requests'] = curl_cffi_mock._requests_mock
 
 import yfinance as yf # type: ignore
 import pandas as pd # type: ignore
@@ -271,7 +248,7 @@ def train_lightgbm(X, y):
 def train_cnn(X, y, sequence_length=10):
     """Train CNN model for time series prediction"""
     # Prepare sequences
-    X_seq, y_seq = create_cnn_sequences(X.values, sequence_length)
+    X_seq, y_seq = create_cnn_sequences(X.values if hasattr(X, 'values') else X, sequence_length)
     
     if len(X_seq) < 20:  # Need minimum sequences
         return None, None
@@ -309,7 +286,7 @@ def train_cnn(X, y, sequence_length=10):
 def get_price(symbol: str):
     try:
         # Use requests session to avoid curl_cffi browser impersonation issues
-        stock = yf.Ticker(symbol, session=requests.Session())
+        stock = yf.Ticker(symbol, session=real_requests.Session())
         data = stock.history(period="1d")
         info = stock.info
         company_name = info.get("longName", symbol)
@@ -333,7 +310,7 @@ def get_price(symbol: str):
 def get_history(symbol: str, range: str = "1d", interval: str = "5m"):
     try:
         # Use requests session to avoid curl_cffi browser impersonation issues
-        stock = yf.Ticker(symbol, session=requests.Session())
+        stock = yf.Ticker(symbol, session=real_requests.Session())
         data = stock.history(period=range, interval=interval)
         if data.empty:
             raise HTTPException(status_code=404, detail="No chart data found.")
@@ -401,7 +378,7 @@ def get_news(symbol: str, limit: int = 5):
             "pageSize": limit,
             "apiKey": NEWS_API_KEY,
         }
-        response = requests.get(NEWS_URL, params=params)
+        response = real_requests.get(NEWS_URL, params=params)
         if response.status_code != 200:
             raise HTTPException(status_code=response.status_code, detail="News API error")
 
@@ -448,7 +425,7 @@ def predict(symbol: str, period: str = "3mo", interval: str = "1d", steps: int =
     """
     try:
         # Use requests session to avoid curl_cffi browser impersonation issues
-        stock = yf.Ticker(symbol, session=requests.Session())
+        stock = yf.Ticker(symbol, session=real_requests.Session())
         data = stock.history(period=period, interval=interval)
 
         if data.empty:
@@ -559,7 +536,7 @@ def predict(symbol: str, period: str = "3mo", interval: str = "1d", steps: int =
             })
 
         # Format predicted data
-            last_date = data.index[-1]
+        last_date = data.index[-1]
         predicted = []
         for i, pred in enumerate(predictions):
             future_date = last_date + pd.Timedelta(days=i+1)
@@ -597,7 +574,7 @@ def compare_algorithms(symbol: str, period: str = "3mo", interval: str = "1d", s
     """Compare all available algorithms and return their performance metrics"""
     try:
         # Use requests session to avoid curl_cffi browser impersonation issues
-        stock = yf.Ticker(symbol, session=requests.Session())
+        stock = yf.Ticker(symbol, session=real_requests.Session())
         data = stock.history(period=period, interval=interval)
 
         if data.empty:
@@ -661,4 +638,3 @@ def compare_algorithms(symbol: str, period: str = "3mo", interval: str = "1d", s
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
