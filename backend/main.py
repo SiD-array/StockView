@@ -24,27 +24,55 @@ class MockCurlCffiRequests(types.ModuleType):
     """Mock curl_cffi.requests that redirects everything to real requests"""
     def __init__(self):
         super().__init__('curl_cffi.requests')
-        # Use our mock Session class instead of real one
+        # Use our mock Session class instead of real one - set it directly
         self.Session = MockSession
+        # Also expose common methods directly
+        self.get = real_requests.get
+        self.post = real_requests.post
+        self.put = real_requests.put
+        self.delete = real_requests.delete
+        self.patch = real_requests.patch
+        self.head = real_requests.head
+        self.options = real_requests.options
         # Copy all other attributes from real requests module
         for attr in dir(real_requests):
-            if not attr.startswith('_') and attr != 'Session':
+            if not attr.startswith('_') and attr not in ['Session', 'get', 'post', 'put', 'delete', 'patch', 'head', 'options']:
                 try:
                     setattr(self, attr, getattr(real_requests, attr))
-                except AttributeError:
+                except (AttributeError, TypeError):
                     pass
+    
+    def __getattr__(self, name):
+        # Fallback for any other attributes
+        return getattr(real_requests, name)
 
 # Create mock curl_cffi module
 class MockCurlCffiModule(types.ModuleType):
     """Mock curl_cffi module"""
     def __init__(self):
         super().__init__('curl_cffi')
-        self.requests = MockCurlCffiRequests()
+        # Create requests mock and store it directly
+        self._requests_mock = MockCurlCffiRequests()
+        # Expose requests as an attribute
+        self.requests = self._requests_mock
+    
+    def __getattr__(self, name):
+        # For any other attributes, raise AttributeError
+        if name == 'requests':
+            return self._requests_mock
+        raise AttributeError(f"module 'curl_cffi' has no attribute '{name}'")
 
 # Set up the mock before importing yfinance
 curl_cffi_mock = MockCurlCffiModule()
 sys.modules['curl_cffi'] = curl_cffi_mock
 sys.modules['curl_cffi.requests'] = curl_cffi_mock.requests
+
+# Verify Session is accessible and is a class (not a function)
+# This will fail fast if there's an issue with the mock
+if not hasattr(curl_cffi_mock.requests, 'Session'):
+    raise RuntimeError("Session not found in curl_cffi.requests mock")
+if not isinstance(curl_cffi_mock.requests.Session, type):
+    raise RuntimeError(f"Session is not a class, it's {type(curl_cffi_mock.requests.Session)}")
 
 # Now import other dependencies
 from sklearn.linear_model import LinearRegression # type: ignore
