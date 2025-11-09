@@ -8,14 +8,27 @@ import types
 # CRITICAL FIX: Import requests first, before creating any mocks
 import requests as real_requests
 
+# Create a mock Session class that ignores curl_cffi-specific parameters
+class MockSession(real_requests.Session):
+    """Mock Session that ignores curl_cffi-specific parameters like 'impersonate'"""
+    def __init__(self, *args, **kwargs):
+        # Remove curl_cffi-specific parameters that requests.Session doesn't accept
+        kwargs.pop('impersonate', None)
+        kwargs.pop('browser', None)
+        # Note: 'verify' is a valid requests.Session parameter, so we keep it
+        # Call parent Session.__init__ with cleaned kwargs
+        super().__init__(*args, **kwargs)
+
 # Create a mock requests module that redirects to real requests
 class MockCurlCffiRequests(types.ModuleType):
     """Mock curl_cffi.requests that redirects everything to real requests"""
     def __init__(self):
         super().__init__('curl_cffi.requests')
-        # Copy all attributes from real requests module
+        # Use our mock Session class instead of real one
+        self.Session = MockSession
+        # Copy all other attributes from real requests module
         for attr in dir(real_requests):
-            if not attr.startswith('_'):
+            if not attr.startswith('_') and attr != 'Session':
                 try:
                     setattr(self, attr, getattr(real_requests, attr))
                 except AttributeError:
