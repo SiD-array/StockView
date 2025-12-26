@@ -2,6 +2,8 @@ import os
 # Disable curl_cffi BEFORE importing yfinance to prevent browser impersonation errors
 os.environ['YFINANCE_DISABLE_CURL_CFFI'] = '1'
 
+import yfinance as yf # type: ignore
+
 # Now import other dependencies
 from sklearn.linear_model import LinearRegression # type: ignore
 from sklearn.ensemble import RandomForestRegressor # type: ignore
@@ -20,7 +22,6 @@ from fastapi.middleware.cors import CORSMiddleware # type: ignore
 from fastapi.responses import JSONResponse # type: ignore
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer # type: ignore
 
-import yfinance as yf # type: ignore
 import pandas as pd # type: ignore
 import numpy as np  # pyright: ignore[reportMissingImports]
 import requests # type: ignore
@@ -284,7 +285,6 @@ def get_price(symbol: str):
 @app.get("/history")
 def get_history(symbol: str, range: str = "1d", interval: str = "5m"):
     try:
-        # yfinance will use our curl_cffi mock which redirects to real requests
         stock = yf.Ticker(symbol)
         data = stock.history(period=range, interval=interval)
         if data.empty:
@@ -411,7 +411,6 @@ def predict(symbol: str, period: str = "3mo", interval: str = "1d", steps: int =
         algorithm: Algorithm to use (linear_regression, random_forest, xgboost, lightgbm, cnn)
     """
     try:
-        # yfinance will use our curl_cffi mock which redirects to real requests
         stock = yf.Ticker(symbol)
         data = stock.history(period=period, interval=interval)
 
@@ -566,7 +565,6 @@ def get_feature_importance(model, feature_cols, algorithm):
 def compare_algorithms(symbol: str, period: str = "3mo", interval: str = "1d", steps: int = 5):
     """Compare all available algorithms and return their performance metrics"""
     try:
-        # yfinance will use our curl_cffi mock which redirects to real requests
         stock = yf.Ticker(symbol)
         data = stock.history(period=period, interval=interval)
 
