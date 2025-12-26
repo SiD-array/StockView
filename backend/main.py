@@ -23,6 +23,7 @@ from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer # type: ign
 import yfinance as yf # type: ignore
 import pandas as pd # type: ignore
 import numpy as np  # pyright: ignore[reportMissingImports]
+import requests # type: ignore
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -254,15 +255,6 @@ def train_cnn(X, y, sequence_length=10):
 @app.get("/price")
 def get_price(symbol: str):
     try:
-        # Verify mock is still working before using yfinance
-        if not hasattr(sys.modules.get('curl_cffi', None), 'requests'):
-            raise RuntimeError("curl_cffi.requests mock not found")
-        if not hasattr(sys.modules['curl_cffi'].requests, 'Session'):
-            raise RuntimeError("Session not found in curl_cffi.requests")
-        if not isinstance(sys.modules['curl_cffi'].requests.Session, type):
-            raise RuntimeError(f"Session is not a class: {type(sys.modules['curl_cffi'].requests.Session)}")
-        
-        # yfinance will use our curl_cffi mock which redirects to real requests
         stock = yf.Ticker(symbol)
         data = stock.history(period="1d")
         info = stock.info
@@ -367,7 +359,7 @@ def get_news(symbol: str, limit: int = 5):
             "pageSize": limit,
             "apiKey": NEWS_API_KEY,
         }
-        response = real_requests.get(NEWS_URL, params=params)
+        response = requests.get(NEWS_URL, params=params)
         if response.status_code != 200:
             raise HTTPException(status_code=response.status_code, detail="News API error")
 
