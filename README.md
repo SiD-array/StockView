@@ -4,7 +4,7 @@
 
 🚀 **Live Deployment**:
 
-* **Frontend (Vercel)** → [View App](https://stock-view-five.vercel.app/)
+* **Frontend (Vercel)** → [View App](https://stock-view-ebon.vercel.app/)
 * **Backend (Render)** → See `DEPLOYMENT_COMPLETE_GUIDE.md` for deployment instructions
 
 ---
