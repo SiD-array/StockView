@@ -1,3 +1,303 @@
 @import "tailwindcss/base";
 @import "tailwindcss/components";
 @import "tailwindcss/utilities";
+
+/* ============================================
+   STOCKVIEW - CUSTOM STYLES
+   Modern Financial Dashboard Theme
+   ============================================ */
+
+/* Base Styles */
+@layer base {
+  * {
+    @apply border-dark-600;
+  }
+
+  html {
+    @apply scroll-smooth;
+  }
+
+  body {
+    @apply bg-dark-900 text-gray-100 font-sans antialiased;
+    background-image: 
+      radial-gradient(ellipse at top, rgba(6, 182, 212, 0.08) 0%, transparent 50%),
+      radial-gradient(ellipse at bottom right, rgba(168, 85, 247, 0.05) 0%, transparent 50%);
+    min-height: 100vh;
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-dark-800;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-dark-600 rounded-full;
+    transition: background 0.2s;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-dark-500;
+  }
+
+  /* Selection color */
+  ::selection {
+    @apply bg-accent-cyan/30 text-white;
+  }
+}
+
+/* Component Styles */
+@layer components {
+  /* Glass Card Effect */
+  .glass-card {
+    @apply bg-dark-800/60 backdrop-blur-xl border border-dark-600/50 rounded-2xl;
+    box-shadow: 
+      0 4px 24px rgba(0, 0, 0, 0.2),
+      inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  }
+
+  .glass-card-hover {
+    @apply glass-card transition-all duration-300;
+  }
+
+  .glass-card-hover:hover {
+    @apply border-accent-cyan/30 shadow-glow-cyan;
+    transform: translateY(-2px);
+  }
+
+  /* Gradient Text */
+  .gradient-text {
+    @apply bg-gradient-to-r from-accent-cyan via-accent-cyan-light to-chart-purple bg-clip-text text-transparent;
+  }
+
+  /* Glowing Button */
+  .btn-primary {
+    @apply px-6 py-2.5 bg-gradient-to-r from-accent-cyan to-accent-cyan-light text-dark-900 font-semibold rounded-xl;
+    @apply transition-all duration-300 hover:shadow-glow-cyan hover:scale-105;
+    @apply focus:outline-none focus:ring-2 focus:ring-accent-cyan/50;
+  }
+
+  .btn-secondary {
+    @apply px-6 py-2.5 bg-dark-700 text-gray-100 font-medium rounded-xl border border-dark-600;
+    @apply transition-all duration-300 hover:bg-dark-600 hover:border-dark-500;
+    @apply focus:outline-none focus:ring-2 focus:ring-dark-500;
+  }
+
+  .btn-ghost {
+    @apply px-4 py-2 text-gray-300 font-medium rounded-lg;
+    @apply transition-all duration-200 hover:bg-dark-700 hover:text-white;
+  }
+
+  .btn-gain {
+    @apply px-4 py-2 bg-gain/20 text-gain border border-gain/30 rounded-lg font-medium;
+    @apply transition-all duration-300 hover:bg-gain/30 hover:shadow-glow-green;
+  }
+
+  .btn-loss {
+    @apply px-4 py-2 bg-loss/20 text-loss border border-loss/30 rounded-lg font-medium;
+    @apply transition-all duration-300 hover:bg-loss/30 hover:shadow-glow-red;
+  }
+
+  /* Input Field */
+  .input-field {
+    @apply w-full px-4 py-3 bg-dark-800 border border-dark-600 rounded-xl text-white;
+    @apply placeholder:text-gray-500 transition-all duration-300;
+    @apply focus:outline-none focus:border-accent-cyan focus:ring-2 focus:ring-accent-cyan/20;
+  }
+
+  /* Select Dropdown */
+  .select-field {
+    @apply px-4 py-2.5 bg-dark-800 border border-dark-600 rounded-xl text-white;
+    @apply transition-all duration-300 cursor-pointer appearance-none;
+    @apply focus:outline-none focus:border-accent-cyan focus:ring-2 focus:ring-accent-cyan/20;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2394a3b8'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    background-size: 16px;
+    padding-right: 40px;
+  }
+
+  /* Badge Styles */
+  .badge {
+    @apply px-3 py-1 text-xs font-semibold rounded-full;
+  }
+
+  .badge-gain {
+    @apply badge bg-gain/20 text-gain border border-gain/30;
+  }
+
+  .badge-loss {
+    @apply badge bg-loss/20 text-loss border border-loss/30;
+  }
+
+  .badge-neutral {
+    @apply badge bg-dark-600 text-gray-300 border border-dark-500;
+  }
+
+  /* Stock Price Display */
+  .price-display {
+    @apply font-mono text-3xl font-bold tracking-tight;
+  }
+
+  .price-change-positive {
+    @apply text-gain flex items-center gap-1;
+  }
+
+  .price-change-negative {
+    @apply text-loss flex items-center gap-1;
+  }
+
+  /* Stat Card */
+  .stat-card {
+    @apply flex flex-col gap-1 p-4 bg-dark-700/50 rounded-xl border border-dark-600/50;
+  }
+
+  .stat-label {
+    @apply text-xs text-gray-400 uppercase tracking-wider font-medium;
+  }
+
+  .stat-value {
+    @apply font-mono text-lg font-semibold text-white;
+  }
+
+  /* Chart Container */
+  .chart-container {
+    @apply glass-card p-6 animate-fade-in;
+  }
+
+  /* Range Button */
+  .range-btn {
+    @apply px-4 py-2 text-sm font-medium rounded-lg transition-all duration-200;
+  }
+
+  .range-btn-active {
+    @apply range-btn bg-accent-cyan text-dark-900 shadow-glow-cyan;
+  }
+
+  .range-btn-inactive {
+    @apply range-btn bg-dark-700 text-gray-300 hover:bg-dark-600 hover:text-white;
+  }
+
+  /* Loading Skeleton */
+  .skeleton {
+    @apply bg-gradient-to-r from-dark-700 via-dark-600 to-dark-700 bg-[length:200%_100%] animate-shimmer rounded;
+  }
+
+  /* Pulse Dot */
+  .pulse-dot {
+    @apply relative;
+  }
+
+  .pulse-dot::before {
+    content: '';
+    @apply absolute -top-1 -right-1 w-2 h-2 bg-gain rounded-full;
+    animation: pulse 2s infinite;
+  }
+
+  /* News Item */
+  .news-item {
+    @apply flex items-start justify-between gap-4 p-4 rounded-xl transition-all duration-200;
+    @apply hover:bg-dark-700/50 cursor-pointer;
+  }
+
+  /* Watchlist Item */
+  .watchlist-item {
+    @apply flex items-center justify-between p-4 rounded-xl border border-dark-600/50;
+    @apply transition-all duration-200 hover:border-accent-cyan/30 hover:bg-dark-700/30;
+  }
+
+  /* Modal Overlay */
+  .modal-overlay {
+    @apply fixed inset-0 bg-dark-950/80 backdrop-blur-sm z-50;
+    @apply flex items-center justify-center animate-fade-in;
+  }
+
+  .modal-content {
+    @apply glass-card p-6 max-w-md w-full mx-4 animate-scale-in;
+  }
+
+  /* Tooltip */
+  .chart-tooltip {
+    @apply glass-card p-4 text-sm border-accent-cyan/30 !important;
+  }
+}
+
+/* Utility Classes */
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  /* Glow effects */
+  .glow-cyan {
+    box-shadow: 0 0 20px rgba(6, 182, 212, 0.4);
+  }
+
+  .glow-green {
+    box-shadow: 0 0 20px rgba(16, 185, 129, 0.4);
+  }
+
+  .glow-red {
+    box-shadow: 0 0 20px rgba(244, 63, 94, 0.4);
+  }
+
+  /* Grid background */
+  .bg-grid {
+    background-image: 
+      linear-gradient(to right, rgba(255,255,255,0.02) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(255,255,255,0.02) 1px, transparent 1px);
+    background-size: 32px 32px;
+  }
+
+  /* Gradient borders */
+  .gradient-border {
+    position: relative;
+  }
+
+  .gradient-border::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(135deg, rgba(6, 182, 212, 0.5), rgba(168, 85, 247, 0.5));
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+  }
+
+  /* Animation delays for staggered effects */
+  .delay-100 { animation-delay: 100ms; }
+  .delay-200 { animation-delay: 200ms; }
+  .delay-300 { animation-delay: 300ms; }
+  .delay-400 { animation-delay: 400ms; }
+  .delay-500 { animation-delay: 500ms; }
+}
+
+/* Recharts Custom Styles */
+.recharts-cartesian-grid-horizontal line,
+.recharts-cartesian-grid-vertical line {
+  stroke: rgba(71, 85, 105, 0.3);
+}
+
+.recharts-tooltip-wrapper {
+  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.3));
+}
+
+.recharts-legend-item-text {
+  color: #e2e8f0 !important;
+}
+
+.recharts-brush-slide {
+  fill: rgba(6, 182, 212, 0.2);
+  stroke: rgba(6, 182, 212, 0.5);
+}
+
+.recharts-brush-traveller rect {
+  fill: #06b6d4;
+}

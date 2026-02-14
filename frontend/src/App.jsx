@@ -1,13 +1,201 @@
 import axios from "axios";
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { Info } from "lucide-react";
+import { TrendingUp, TrendingDown, Activity, BarChart3, Star, HelpCircle, X, Search, Plus, Trash2, ExternalLink, Clock, Zap, Brain } from "lucide-react";
 import { db } from "./firebase";
 import { collection, getDocs, addDoc, deleteDoc, doc } from "firebase/firestore";
-import { Cell, Bar, BarChart, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Brush, Legend, CartesianGrid, ReferenceDot } from 'recharts';
+import { Cell, Bar, BarChart, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Brush, Legend, CartesianGrid, ReferenceDot, Area, AreaChart } from 'recharts';
 
-// Main App Component
+// Get API URL from environment or use localhost as fallback
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
+// ============================================
+// CUSTOM COMPONENTS
+// ============================================
+
+// Loading Spinner Component
+const LoadingSpinner = ({ size = "md", text = "Loading..." }) => {
+  const sizeClasses = {
+    sm: "w-4 h-4",
+    md: "w-6 h-6",
+    lg: "w-8 h-8"
+  };
+
+  return (
+    <div className="flex flex-col items-center justify-center gap-3">
+      <div className={`${sizeClasses[size]} border-2 border-dark-600 border-t-accent-cyan rounded-full animate-spin`} />
+      <span className="text-gray-400 text-sm">{text}</span>
+    </div>
+  );
+};
+
+// Skeleton Loader
+const Skeleton = ({ className = "" }) => (
+  <div className={`skeleton ${className}`} />
+);
+
+// Price Change Badge
+const PriceChangeBadge = ({ value, showIcon = true }) => {
+  const isPositive = value >= 0;
+  return (
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-sm font-mono font-medium ${
+      isPositive ? 'bg-gain/20 text-gain' : 'bg-loss/20 text-loss'
+    }`}>
+      {showIcon && (isPositive ? <TrendingUp size={14} /> : <TrendingDown size={14} />)}
+      {isPositive ? '+' : ''}{value?.toFixed(2)}%
+    </span>
+  );
+};
+
+// Help Modal Component
+const HelpModal = ({ open, onClose }) => {
+  if (!open) return null;
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content max-w-lg" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-2xl font-bold gradient-text">About StockView</h2>
+          <button onClick={onClose} className="p-2 hover:bg-dark-700 rounded-lg transition-colors">
+            <X size={20} className="text-gray-400" />
+          </button>
+        </div>
+
+        <p className="text-gray-300 mb-6">
+          StockView is a real-time stock analysis dashboard with interactive charts,
+          ML predictions, and sentiment analysis.
+        </p>
+
+        <div className="space-y-4">
+          <div>
+            <h3 className="text-lg font-semibold text-white mb-2 flex items-center gap-2">
+              <Zap size={18} className="text-accent-cyan" /> Features
+            </h3>
+            <ul className="space-y-2 text-sm text-gray-300">
+              <li className="flex items-start gap-2">
+                <span className="text-accent-cyan mt-1">•</span>
+                <span><strong className="text-white">SMA 10:</strong> Simple Moving Average for trend analysis</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-loss mt-1">•</span>
+                <span><strong className="text-white">Anomalies:</strong> Unusual price movements detected via Z-score</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-chart-purple mt-1">•</span>
+                <span><strong className="text-white">ML Predictions:</strong> Multiple algorithms including XGBoost & CNN</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-gain mt-1">•</span>
+                <span><strong className="text-white">Sentiment:</strong> News headlines with AI-powered sentiment scores</span>
+              </li>
+            </ul>
+          </div>
+
+          <div className="pt-4 border-t border-dark-600">
+            <h3 className="text-lg font-semibold text-white mb-2">Quick Tips</h3>
+            <ul className="space-y-1 text-sm text-gray-400">
+              <li>• Use 1D/5D/1M/6M/1Y to switch time ranges</li>
+              <li>• Drag the brush below the chart to zoom</li>
+              <li>• Click stocks in watchlist to quickly switch</li>
+            </ul>
+          </div>
+        </div>
+
+        <button onClick={onClose} className="btn-primary w-full mt-6">
+          Got it
+        </button>
+      </div>
+    </div>
+  );
+};
+
+// Popup/Toast Component
+const Popup = ({ show, message, onClose }) => {
+  if (!show) return null;
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content text-center" onClick={e => e.stopPropagation()}>
+        <p className="text-gray-200 mb-6 whitespace-pre-line">{message}</p>
+        <button onClick={onClose} className="btn-primary">
+          OK
+        </button>
+      </div>
+    </div>
+  );
+};
+
+// Custom Tooltip for Charts
+const CustomChartTooltip = ({ active, payload }) => {
+  if (active && payload && payload.length) {
+    const data = payload[0].payload;
+    return (
+      <div className="glass-card p-4 border-accent-cyan/30 min-w-[200px]">
+        <p className="font-semibold text-white mb-2">{data.time}</p>
+        <div className="space-y-1.5 text-sm">
+          <div className="flex justify-between">
+            <span className="text-gray-400">Price:</span>
+            <span className="font-mono text-accent-cyan font-semibold">${data.price}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-gray-400">Open:</span>
+            <span className="font-mono text-gray-300">${data.open}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-gray-400">High:</span>
+            <span className="font-mono text-gain">${data.high}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-gray-400">Low:</span>
+            <span className="font-mono text-loss">${data.low}</span>
+          </div>
+          {data.sma_10 && (
+            <div className="flex justify-between">
+              <span className="text-gray-400">SMA 10:</span>
+              <span className="font-mono text-chart-orange">${data.sma_10}</span>
+            </div>
+          )}
+          <div className="flex justify-between">
+            <span className="text-gray-400">Volume:</span>
+            <span className="font-mono text-gray-300">{data.volume?.toLocaleString()}</span>
+          </div>
+          {data.anomaly && (
+            <div className="mt-2 px-2 py-1 bg-loss/20 rounded text-loss text-xs font-semibold">
+              ⚠️ Anomaly Detected
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+  return null;
+};
+
+// Stat Card Component
+const StatCard = ({ label, value, prefix = "", suffix = "", mono = true }) => (
+  <div className="stat-card">
+    <span className="stat-label">{label}</span>
+    <span className={`stat-value ${mono ? 'font-mono' : ''}`}>
+      {prefix}{typeof value === 'number' ? value.toLocaleString() : value}{suffix}
+    </span>
+  </div>
+);
+
+// Range Button Component
+const RangeButton = ({ label, active, onClick }) => (
+  <button
+    onClick={onClick}
+    className={active ? 'range-btn-active' : 'range-btn-inactive'}
+  >
+    {label}
+  </button>
+);
+
+// ============================================
+// MAIN APP COMPONENT
+// ============================================
 
 function App() {
+  // State
   const [symbol, setSymbol] = useState("AAPL");
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -27,6 +215,7 @@ function App() {
   const [modelMetrics, setModelMetrics] = useState(null);
   const [algorithmComparison, setAlgorithmComparison] = useState(null);
   const [showComparison, setShowComparison] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
 
   // Fetch watchlist
   const fetchWatchlist = async () => {
@@ -36,25 +225,24 @@ function App() {
   };
 
   // Add to watchlist
-  const addToWatchlist = async (symbol) => {
-    if (!symbol) return;
-
-    // Prevent duplicates
-    if (watchlist.some(item => item.symbol === symbol)) {
-      alert("Symbol already in watchlist!");
+  const addToWatchlist = async (sym) => {
+    if (!sym) return;
+    if (watchlist.some(item => item.symbol === sym)) {
+      setPopupMessage("Symbol already in watchlist!");
+      setShowPopup(true);
       return;
     }
 
     try {
-      await addDoc(collection(db, "watchlist"), { symbol });
+      await addDoc(collection(db, "watchlist"), { symbol: sym });
       await fetchWatchlist();
-      setPopupMessage(`✅ ${symbol} added to watchlist successfully!`);
+      setPopupMessage(`✅ ${sym} added to watchlist!`);
       setShowPopup(true);
     } catch (error) {
-      alert("Error adding to watchlist. Please try again.");
+      setPopupMessage("Error adding to watchlist. Please try again.");
+      setShowPopup(true);
     }
   };
-
 
   // Remove from watchlist
   const removeFromWatchlist = async (id) => {
@@ -62,128 +250,7 @@ function App() {
     fetchWatchlist();
   };
 
-  function HelpModal() {
-    const [open, setOpen] = useState(false);
-
-    return (
-      <>
-        {/* Toggle Button */}
-        <div className="flex justify-end mb-4">
-          <button
-            onClick={() => setOpen(true)}
-            className="absolute top-4 right-4 bg-blue-600 text-white px-3 py-1 rounded-md hover:bg-blue-700"
-          >
-            Help
-          </button>
-        </div>
-
-        {open && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white p-6 rounded-xl shadow-lg w-96">
-              <h2 className="text-xl font-semibold mb-3">📘 About StockView</h2>
-              <p className="text-sm mb-3">
-                StockView is a real-time stock analysis dashboard. You can search any stock symbol,
-                choose time ranges, and interact with charts (zoom/pan).
-              </p>
-
-              <h3 className="text-md font-medium">Features:</h3>
-              <ul className="list-disc list-inside text-sm mb-4 text-gray-700">
-                <li><b>SMA 10:</b> Simple Moving Average smoothing short-term trends.</li>
-                <li><b>Anomalies:</b> Points where price deviates unusually (high Z-score).</li>
-                <li><b>Interactive Chart:</b> Zoom and pan to explore timeframes.</li>
-                <li><b>Tips:</b> Use 1D/5D/1M/6M/1Y buttons to switch time ranges.</li>
-              </ul>
-
-              <button
-                onClick={() => setOpen(false)}
-                className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        )}
-      </>
-    );
-  }
-
-  // Custom tooltip to show anomaly information
-  const CustomTooltip = ({ active, payload, label }) => {
-    if (active && payload && payload.length) {
-      const data = payload[0].payload;
-      return (
-        <div className="bg-white p-3 border border-gray-300 rounded shadow-lg">
-          <p className="font-semibold">{`Time: ${data.time}`}</p>
-          <p className="text-blue-600">{`Price: ${data.price}`}</p>
-          <p className="text-gray-600">{`Open: ${data.open} | High: ${data.high} | Low: ${data.low}`}</p>
-          {data.sma_10 && <p className="text-yellow-600">{`SMA 10: ${data.sma_10}`}</p>}
-          {data.anomaly && (
-            <p className="text-red-600 font-semibold">⚠️ Anomaly Detected!</p>
-          )}
-          <p className="text-gray-600">{`Volume: ${data.volume?.toLocaleString()}`}</p>
-        </div>
-      );
-    }
-    return null;
-  };
-
-  const handleSearch = async () => {
-    if (!symbol.trim()) {
-      setData(null);
-      setChartData([]);
-      setError("Please enter a stock symbol.");
-      return; // stop further execution
-    }
-
-    setLoading(true);
-    setError("");
-    try {
-      await fetchStock(symbol, range.value, range.interval);
-      // Fetch news
-      const res = await axios.get(`${API_URL}/news?symbol=${symbol}`);
-      setNews(res.data.news || []);
-      setPredictions([]);
-      setShowPredictions(false);
-    } catch (err) {
-      console.error('Search error:', err);
-      // Better error messages
-      if (err.message && err.message.includes('Network Error')) {
-        setPopupMessage(`⚠️ Cannot connect to backend API. Please check:\n1. Backend is running on Render\n2. VITE_API_URL is set in Vercel\n3. Backend URL: ${API_URL}`);
-      } else if (err.message && err.message.includes('404')) {
-        setPopupMessage("⚠️ Stock symbol not found. Please enter a valid symbol.");
-      } else {
-        setPopupMessage(`⚠️ Error: ${err.message || 'Unknown error occurred'}`);
-      }
-      setShowPopup(true);
-      setError(err.message || "Stock not found or API error");
-      setNews([]); // clear old news
-    }
-    setLoading(false);
-  };
-
-  useEffect(() => {
-    const intervalId = setInterval(() => {
-      if (symbol) {
-        fetchStock(symbol, range.value, range.interval);
-      }
-    }, 600000);
-    return () => clearInterval(intervalId);
-  }, [symbol, range]);
-
-  // Load watchlist on component mount
-  useEffect(() => {
-    fetchWatchlist();
-  }, []);
-
-  // Get API URL from environment or use localhost as fallback
-  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-  
-  // Debug: Log API URL (remove in production if needed)
-  useEffect(() => {
-    console.log('API URL:', API_URL);
-    console.log('Environment variable:', import.meta.env.VITE_API_URL);
-  }, []);
-
+  // Fetch stock data
   const fetchStock = useCallback(async (symbolOverride = symbol, selectedRange = range.value, selectedInterval = range.interval) => {
     try {
       setError("");
@@ -195,24 +262,17 @@ function App() {
 
       if (!priceRes.ok) {
         const errorText = await priceRes.text();
-        console.error('Price API error:', priceRes.status, errorText);
-        setData(null);
-        setChartData([]);
         throw new Error(`API Error: ${priceRes.status} - ${errorText || 'Stock not found'}`);
       }
 
       if (!chartRes.ok) {
         const errorText = await chartRes.text();
-        console.error('Chart API error:', chartRes.status, errorText);
-        setData(null);
-        setChartData([]);
         throw new Error(`API Error: ${chartRes.status} - ${errorText || 'Chart data not found'}`);
       }
 
       const newPrice = await priceRes.json();
       const newChart = await chartRes.json();
 
-      // Only update if data actually changed - replace the JSON.stringify comparison
       setData(prevData => {
         if (!prevData || prevData.price !== newPrice.price || prevData.volume !== newPrice.volume) {
           return newPrice;
@@ -229,27 +289,58 @@ function App() {
       });
 
       setLastUpdate(new Date().toLocaleTimeString());
-
     } catch (err) {
-      console.error('Fetch stock error:', err);
-      // Check if it's a network error
       if (err.name === 'TypeError' && err.message.includes('fetch')) {
-        setError(`Network Error: Cannot connect to backend at ${API_URL}. Please check if the backend is running and the VITE_API_URL is set correctly.`);
+        setError(`Cannot connect to backend. Please check if the server is running.`);
       } else {
         setError(err.message || "Failed to fetch stock data");
       }
     }
-  }, [symbol, range.value, range.interval, API_URL]);
+  }, [symbol, range.value, range.interval]);
 
+  // Search handler
+  const handleSearch = async () => {
+    if (!symbol.trim()) {
+      setData(null);
+      setChartData([]);
+      setError("Please enter a stock symbol.");
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+    try {
+      await fetchStock(symbol, range.value, range.interval);
+      const res = await axios.get(`${API_URL}/news?symbol=${symbol}`);
+      setNews(res.data.news || []);
+      setPredictions([]);
+      setShowPredictions(false);
+    } catch (err) {
+      if (err.message && err.message.includes('Network Error')) {
+        setPopupMessage(`Cannot connect to backend API.`);
+      } else if (err.message && err.message.includes('404')) {
+        setPopupMessage("Stock symbol not found. Please enter a valid symbol.");
+      } else {
+        setPopupMessage(`Error: ${err.message || 'Unknown error occurred'}`);
+      }
+      setShowPopup(true);
+      setError(err.message || "Stock not found or API error");
+      setNews([]);
+    }
+    setLoading(false);
+  };
+
+  // Fetch predictions
   const fetchPredictions = useCallback(async (symbolOverride = symbol, algorithm = selectedAlgorithm) => {
     setPredictionLoading(true);
     try {
       const response = await fetch(`${API_URL}/predict?symbol=${symbolOverride}&period=6mo&interval=1d&steps=5&algorithm=${algorithm}`);
-      if (!response.ok) throw new Error("Failed to fetch predictions");
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || `Server error: ${response.status}`);
+      }
 
       const predictionData = await response.json();
-
-      // Combine historical and predicted data for the same chart
       const combinedData = [
         ...predictionData.history.map(item => ({ ...item, predicted: null })),
         ...predictionData.predictions.map(item => ({ ...item, price: null }))
@@ -264,11 +355,11 @@ function App() {
     }
   }, [symbol, selectedAlgorithm]);
 
+  // Fetch algorithm comparison
   const fetchAlgorithmComparison = useCallback(async (symbolOverride = symbol) => {
     try {
       const response = await fetch(`${API_URL}/predict/compare?symbol=${symbolOverride}&period=6mo&interval=1d&steps=5`);
       if (!response.ok) throw new Error("Failed to fetch algorithm comparison");
-
       const comparisonData = await response.json();
       setAlgorithmComparison(comparisonData);
     } catch (err) {
@@ -276,557 +367,653 @@ function App() {
     }
   }, [symbol]);
 
+  // Auto-refresh
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      if (symbol) fetchStock(symbol, range.value, range.interval);
+    }, 600000);
+    return () => clearInterval(intervalId);
+  }, [symbol, range, fetchStock]);
+
+  // Load watchlist on mount
+  useEffect(() => {
+    fetchWatchlist();
+  }, []);
+
+  // Memoized anomaly data
   const anomalyData = useMemo(() => chartData.filter(d => d.anomaly), [chartData]);
 
+  // Range options
+  const rangeOptions = [
+    { label: "1D", value: "1d", interval: "5m" },
+    { label: "5D", value: "5d", interval: "30m" },
+    { label: "1M", value: "1mo", interval: "1d" },
+    { label: "6M", value: "6mo", interval: "1d" },
+    { label: "1Y", value: "1y", interval: "1d" },
+  ];
+
+  // Algorithm options
+  const algorithmOptions = [
+    { value: "linear_regression", label: "Linear Regression" },
+    { value: "random_forest", label: "Random Forest" },
+    { value: "xgboost", label: "XGBoost" },
+    { value: "lightgbm", label: "LightGBM" },
+    { value: "cnn", label: "CNN (Deep Learning)" },
+  ];
+
   return (
-    <div className="min-h-screen bg-gray-100 p-6">
-      <div className="flex justify-center items-center mb-6 relative p-4">
-        <HelpModal />
-        <button
-          onClick={() => setViewMode(viewMode === "chart" ? "watchlist" : "chart")}
-          className="bg-yellow-500 text-white px-4 py-2 rounded-md hover:bg-yellow-600 absolute top-3 right-20"
-        >
-          {viewMode === "chart" ? "⭐ Watchlist" : "📊 Back to Chart"}
-        </button>
-        <h1 className="text-3xl font-bold text-center text-blue-600">
-          📈 Stock Analysis Dashboard
-        </h1>
+    <div className="min-h-screen bg-dark-900 bg-grid">
+      {/* Background Effects */}
+      <div className="fixed inset-0 pointer-events-none">
+        <div className="absolute top-0 left-1/4 w-96 h-96 bg-accent-cyan/5 rounded-full blur-3xl" />
+        <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-chart-purple/5 rounded-full blur-3xl" />
       </div>
-      <div className="flex flex-col lg:flex-row gap-4 p-4 h-screen overflow-hidden">
 
-        {/* Sidebar */}
-        <div className="w-full lg:w-1/4 bg-white p-4 rounded-xl shadow-md space-y-4 overflow-y-auto">
-          <h2 className="text-xl font-semibold">📊 Stock Insights</h2>
-          <p>
-            This tool provides real-time stock visualization with interactive charts,
-            zoom & pan, anomaly detection, and sentiment overlays.
-          </p>
-
-          <div>
-            <h3 className="text-md font-medium mt-4">Popular Stocks</h3>
-            <ul className="list-disc list-inside text-sm text-gray-700">
-              <li>AAPL – Apple</li>
-              <li>MSFT – Microsoft</li>
-              <li>GOOGL – Alphabet</li>
-              <li>TSLA – Tesla</li>
-              <li>AMZN – Amazon</li>
-            </ul>
-          </div>
-
-          <div>
-            <h3 className="text-md font-medium mt-4">Quick Tips</h3>
-            <ul className="list-disc list-inside text-sm text-gray-700">
-              <li>Enter a valid stock symbol to search</li>
-              <li>Use zoom/pan to explore trends</li>
-              <li>Watch out for sudden spikes (anomalies)</li>
-            </ul>
-          </div>
-
-          <div>
-            <h3 className="text-md font-medium mt-4">Feature Info</h3>
-            <ul className="list-disc list-inside text-sm text-gray-700">
-              <li><b>SMA (Simple Moving Average):</b> Smooths short-term fluctuations to reveal trends.</li>
-              <li><b>Anomaly Detection:</b> Highlights unusual price movements with red markers.</li>
-              <li><b>Advanced ML Predictions:</b> Multiple algorithms (Random Forest, XGBoost, LightGBM, CNN) with technical indicators.</li>
-              <li><b>Technical Indicators:</b> RSI, MACD, Bollinger Bands, ATR, and more for comprehensive analysis.</li>
-              <li><b>Model Comparison:</b> Compare algorithm performance with R², MAE, and MSE metrics.</li>
-            </ul>
-          </div>
-
-          {lastUpdate && (
-            <div className="mt-4 text-xs text-gray-500">
-              Last updated: {lastUpdate}
+      {/* Header */}
+      <header className="relative z-10 border-b border-dark-700/50 bg-dark-900/80 backdrop-blur-xl sticky top-0">
+        <div className="max-w-7xl mx-auto px-6 py-4">
+          <div className="flex items-center justify-between">
+            {/* Logo */}
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-accent-cyan to-chart-purple flex items-center justify-center">
+                <Activity size={24} className="text-white" />
+              </div>
+              <div>
+                <h1 className="text-xl font-bold text-white">StockView</h1>
+                <p className="text-xs text-gray-500">Real-Time Analysis</p>
+              </div>
             </div>
-          )}
 
+            {/* Header Actions */}
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setViewMode(viewMode === "chart" ? "watchlist" : "chart")}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-200 ${
+                  viewMode === "watchlist"
+                    ? "bg-chart-orange text-dark-900"
+                    : "bg-dark-700 text-gray-300 hover:bg-dark-600"
+                }`}
+              >
+                <Star size={18} />
+                {viewMode === "chart" ? "Watchlist" : "Back to Chart"}
+              </button>
+              <button
+                onClick={() => setShowHelp(true)}
+                className="p-2.5 bg-dark-700 rounded-xl text-gray-400 hover:text-white hover:bg-dark-600 transition-colors"
+              >
+                <HelpCircle size={20} />
+              </button>
+            </div>
+          </div>
         </div>
+      </header>
 
-        {viewMode === "chart" ? (
-          <>
-            {/* Chart Content */}
-            <div className="w-full lg:w-3/4 max-h-full overflow-auto bg-white p-6 rounded-xl shadow-md space-y-2">
-              {/* Search Bar */}
-              <div className="flex gap-2 mb-4">
-                <input
-                  type="text"
-                  className="flex-1 border border-gray-300 p-2 rounded-md"
-                  value={symbol}
-                  placeholder="Enter stock symbol (e.g., AAPL)"
-                  onChange={(e) => setSymbol(e.target.value.toUpperCase())}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      handleSearch();
-                    }
-                  }}
-                />
-                <button
-                  onClick={handleSearch}
-                  className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
-                >
-                  Search
-                </button>
+      {/* Main Content */}
+      <main className="relative z-10 max-w-7xl mx-auto px-6 py-8">
+        <div className="flex flex-col lg:flex-row gap-6">
+          
+          {/* Sidebar */}
+          <aside className="w-full lg:w-72 flex-shrink-0">
+            <div className="glass-card p-6 sticky top-24">
+              <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                <BarChart3 size={20} className="text-accent-cyan" />
+                Stock Insights
+              </h2>
+              
+              <p className="text-sm text-gray-400 mb-6">
+                Real-time visualization with interactive charts, anomaly detection, and ML predictions.
+              </p>
+
+              <div className="mb-6">
+                <h3 className="text-sm font-semibold text-gray-300 mb-3">Popular Stocks</h3>
+                <div className="flex flex-wrap gap-2">
+                  {["AAPL", "MSFT", "GOOGL", "TSLA", "AMZN"].map(s => (
+                    <button
+                      key={s}
+                      onClick={() => {
+                        setSymbol(s);
+                        setTimeout(() => handleSearch(), 100);
+                      }}
+                      className="px-3 py-1.5 text-xs font-mono bg-dark-700 text-gray-300 rounded-lg hover:bg-accent-cyan hover:text-dark-900 transition-all"
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
               </div>
 
-              {loading && <p className="text-center text-gray-500">Loading...</p>}
-
-              {error && (<p className="text-center text-red-500 text-sm">{error}</p>)}
-
-              {data && (
-                <div className="flex justify-center mt-2 relative">
-                  <div className="flex gap-2 items-center">
-                    <select
-                      value={selectedAlgorithm}
-                      onChange={(e) => setSelectedAlgorithm(e.target.value)}
-                      className="px-3 py-2 border border-gray-300 rounded-md text-sm"
-                    >
-                      <option value="linear_regression">Linear Regression</option>
-                      <option value="random_forest">Random Forest</option>
-                      <option value="xgboost">XGBoost</option>
-                      <option value="lightgbm">LightGBM</option>
-                      <option value="cnn">CNN</option>
-                    </select>
-                    <button
-                      onClick={() => {
-                        if (!showPredictions) {
-                          fetchPredictions();
-                        }
-                        setShowPredictions(!showPredictions);
-                      }}
-                      className={`px-4 py-2 rounded-md border ${showPredictions
-                        ? "bg-purple-600 text-white"
-                        : "bg-white text-purple-600 border-purple-600"
-                        }`}
-                    >
-                      {predictionLoading ? "Loading..." : showPredictions ? "Hide Predictions" : "Add Predictions"}
-                    </button>
-                    <button
-                      onClick={() => {
-                        if (!showComparison) {
-                          fetchAlgorithmComparison();
-                        }
-                        setShowComparison(!showComparison);
-                      }}
-                      className={`px-3 py-2 rounded-md border text-sm ${showComparison
-                        ? "bg-green-600 text-white"
-                        : "bg-white text-green-600 border-green-600"
-                        }`}
-                    >
-                      {showComparison ? "Hide Comparison" : "Compare Models"}
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {data && (
-                <div className="text-center">
-                  <h2 className="text-2xl font-bold mb-2">{data.company}</h2>
-                  <p className="text-lg text-green-600 transition-all duration-500 ease-in-out">Current Price: ${data.price}</p>
-                  <div className="flex gap-5 mt-1 mb-3 justify-center font-semibold">
-                    <p className="text-sm text-gray-700">Open: ${data.open}</p>
-                    <p className="text-sm text-gray-700">High: ${data.high}</p>
-                    <p className="text-sm text-gray-700">Low: ${data.low}</p>
-                    <p className="text-sm text-gray-700">Volume: {data.volume.toLocaleString()}</p>
-                  </div>
-                </div>
-              )}
-
-              <div className="flex gap-2 justify-center mt-4 flex-wrap">
-                {[
-                  { label: "1D", value: "1d", interval: "5m" },
-                  { label: "5D", value: "5d", interval: "30m" },
-                  { label: "1M", value: "1mo", interval: "1d" },
-                  { label: "6M", value: "6mo", interval: "1d" },
-                  { label: "1Y", value: "1y", interval: "1d" },
-                ].map(({ label, value, interval }) => (
-                  <button
-                    key={value}
-                    onClick={() => {
-                      setRange({ value, interval });
-                      fetchStock(symbol, value, interval);  // update chart immediately
-                    }}
-                    className={`px-3 py-1 rounded-md border ${range.value === value
-                      ? "bg-blue-600 text-white"
-                      : "bg-white text-blue-600 border-blue-600"
-                      }`}
-                  >
-                    {label}
-                  </button>
-                ))}
+              <div className="mb-6">
+                <h3 className="text-sm font-semibold text-gray-300 mb-3">Features</h3>
+                <ul className="space-y-2 text-xs text-gray-400">
+                  <li className="flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-chart-orange" />
+                    SMA Trend Lines
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-loss" />
+                    Anomaly Detection
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-chart-purple" />
+                    ML Price Predictions
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-gain" />
+                    Sentiment Analysis
+                  </li>
+                </ul>
               </div>
 
-              {chartData.length > 0 && (
-                <div className="bg-white mt-4 p-4 rounded-xl shadow-md max-w-3xl mx-auto">
-                  <h3 className="text-lg font-semibold text-center mb-2">Intraday Price Chart</h3>
-                  <ResponsiveContainer width="100%" height={250}>
-                    <LineChart data={showPredictions && predictions.length > 0 ? predictions : chartData}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="time" tick={{ fontSize: 10 }} angle={-45} textAnchor="end" interval={chartData.length > 50 ? Math.floor(chartData.length / 10) : 0}>
-                      </XAxis>
-                      <YAxis domain={['auto', 'auto']} />
-                      <Tooltip content={CustomTooltip} />
-                      <Legend
-                        formatter={(value) => {
-                          if (value === "sma_10") {
-                            return (
-                              <span className="flex items-center gap-1">
-                                SMA 10
-                                <div className="relative group">
-                                  <Info size={14} className="text-gray-500 cursor-pointer" />
-                                  <div className="absolute left-5 top-0 hidden group-hover:block bg-gray-800 text-white text-xs p-2 rounded w-48 z-10">
-                                    Simple Moving Average over the last 10 data points. Smooths price trends.
-                                  </div>
-                                </div>
-                              </span>
-                            );
-                          }
-                          if (value === "price") return "Price";
-                          return value;
-                        }}
+              {lastUpdate && (
+                <div className="flex items-center gap-2 text-xs text-gray-500 pt-4 border-t border-dark-600">
+                  <Clock size={14} />
+                  Updated: {lastUpdate}
+                </div>
+              )}
+            </div>
+          </aside>
+
+          {/* Main Panel */}
+          <div className="flex-1 min-w-0">
+            {viewMode === "chart" ? (
+              <div className="space-y-6 animate-fade-in">
+                {/* Search Bar */}
+                <div className="glass-card p-4">
+                  <div className="flex gap-3">
+                    <div className="relative flex-1">
+                      <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" size={20} />
+                      <input
+                        type="text"
+                        value={symbol}
+                        onChange={(e) => setSymbol(e.target.value.toUpperCase())}
+                        onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+                        placeholder="Enter stock symbol (e.g., AAPL)"
+                        className="input-field pl-12"
                       />
+                    </div>
+                    <button onClick={handleSearch} className="btn-primary flex items-center gap-2">
+                      <Search size={18} />
+                      Search
+                    </button>
+                  </div>
+                </div>
 
-                      {/* Price Line */}
-                      <Line type="monotone" dataKey="price" stroke="#2563eb" strokeWidth={2} dot={false} />
-                      {/* SMA 10 Line */}
-                      <Line type="monotone" dataKey="sma_10" stroke="#f59e0b" dot={false} strokeWidth={2} name="SMA 10" />
-                      {/* Predicted Price Line */}
-                      {showPredictions && (
-                        <Line
-                          type="monotone"
-                          dataKey="predicted"
-                          stroke="#9333ea"
-                          strokeWidth={2}
-                          strokeDasharray="5 5"
-                          dot={{ fill: '#9333ea', r: 4 }}
-                          name="Predicted Price"
-                          connectNulls={false}
-                        />
-                      )}
-                      {/* Anomaly markers */}
-                      {anomalyData.map((point, index) => (
-                        <ReferenceDot
-                          key={`anomaly-${point.timestamp || index}`}
-                          x={point.time}
-                          y={point.price}
-                          r={4}
-                          fill="#ef4444"
-                          stroke="#dc2626"
-                          strokeWidth={2}
-                        />
-                      ))}
-                      <Brush className="mt-2" dataKey="time" height={30} stroke="#8884d8" />
-                    </LineChart>
-                  </ResponsiveContainer>
+                {/* Loading State */}
+                {loading && (
+                  <div className="glass-card p-12">
+                    <LoadingSpinner text="Fetching stock data..." />
+                  </div>
+                )}
 
-                  {/* Conditional Summary - Anomaly or Prediction */}
-                  {showPredictions ? (
-                    <div className="mt-4 p-3 bg-orange-50 border border-orange-300 rounded-lg">
-                      <h4 className="font-semibold text-orange-800 mb-2">📊 Price Predictions</h4>
-                      <div className="text-sm text-orange-700 space-y-2">
-                        <p>
-                          Showing 5-day price predictions using <strong>{selectedAlgorithm.replace('_', ' ').toUpperCase()}</strong> algorithm with advanced technical indicators.
-                        </p>
-                        {modelMetrics && (
-                          <div className="bg-blue-50 border border-blue-300 p-2 rounded text-blue-800">
-                            <strong>Model Performance:</strong> R² = {modelMetrics.r2?.toFixed(3)}, MAE = ${modelMetrics.mae?.toFixed(2)}, MSE = {modelMetrics.mse?.toFixed(2)}
+                {/* Error State */}
+                {error && (
+                  <div className="glass-card p-4 border-loss/30 bg-loss/5">
+                    <p className="text-loss text-center">{error}</p>
+                  </div>
+                )}
+
+                {/* Stock Data Display */}
+                {data && !loading && (
+                  <>
+                    {/* Stock Header */}
+                    <div className="glass-card p-6 animate-slide-up">
+                      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
+                        <div>
+                          <div className="flex items-center gap-3 mb-1">
+                            <h2 className="text-2xl font-bold text-white">{data.company}</h2>
+                            <span className="px-2 py-0.5 bg-dark-700 rounded text-xs font-mono text-gray-400">
+                              {data.symbol}
+                            </span>
                           </div>
-                        )}
-                        <div className="bg-red-100 border border-red-300 p-2 rounded text-red-800">
-                          <strong>⚠️ IMPORTANT DISCLAIMER:</strong> These predictions are for educational purposes only and should NOT be used for investment decisions. Stock prices are influenced by countless unpredictable factors including market sentiment, news, economic conditions, and global events that this model cannot account for. Past performance does not guarantee future results. Always consult with qualified financial advisors before making investment decisions.
+                          <div className="flex items-baseline gap-3">
+                            <span className="text-4xl font-bold font-mono text-white">
+                              ${data.price}
+                            </span>
+                          </div>
                         </div>
+
+                        <button
+                          onClick={() => addToWatchlist(symbol)}
+                          className="btn-secondary flex items-center gap-2 self-start"
+                        >
+                          <Star size={18} />
+                          Add to Watchlist
+                        </button>
+                      </div>
+
+                      {/* Stats Grid */}
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        <StatCard label="Open" value={data.open} prefix="$" />
+                        <StatCard label="High" value={data.high} prefix="$" />
+                        <StatCard label="Low" value={data.low} prefix="$" />
+                        <StatCard label="Volume" value={data.volume} />
                       </div>
                     </div>
-                  ) : (
-                    chartData.filter(d => d.anomaly).length > 0 && (
-                      <div className="mt-4 p-2 bg-red-50 border border-red-200 rounded-lg">
-                        <h4 className="font-semibold text-red-800 mb-2">⚠️ Anomalies Detected</h4>
-                        <p className="text-sm text-red-700">
-                          Found {chartData.filter(d => d.anomaly).length} price anomalies in the current timeframe.
-                          The red points represent significant deviations from the recent price trend.
-                        </p>
+
+                    {/* Prediction Controls */}
+                    <div className="glass-card p-4 animate-slide-up delay-100">
+                      <div className="flex flex-wrap items-center gap-3">
+                        <select
+                          value={selectedAlgorithm}
+                          onChange={(e) => setSelectedAlgorithm(e.target.value)}
+                          className="select-field"
+                        >
+                          {algorithmOptions.map(opt => (
+                            <option key={opt.value} value={opt.value}>{opt.label}</option>
+                          ))}
+                        </select>
+
+                        <button
+                          onClick={() => {
+                            if (!showPredictions) fetchPredictions();
+                            setShowPredictions(!showPredictions);
+                          }}
+                          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium transition-all ${
+                            showPredictions
+                              ? "bg-chart-purple text-white shadow-lg shadow-chart-purple/25"
+                              : "bg-dark-700 text-chart-purple border border-chart-purple/30 hover:bg-chart-purple/10"
+                          }`}
+                        >
+                          <Brain size={18} />
+                          {predictionLoading ? "Loading..." : showPredictions ? "Hide Predictions" : "Show Predictions"}
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            if (!showComparison) fetchAlgorithmComparison();
+                            setShowComparison(!showComparison);
+                          }}
+                          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium transition-all ${
+                            showComparison
+                              ? "bg-gain text-dark-900"
+                              : "bg-dark-700 text-gain border border-gain/30 hover:bg-gain/10"
+                          }`}
+                        >
+                          <Zap size={18} />
+                          {showComparison ? "Hide Comparison" : "Compare Models"}
+                        </button>
                       </div>
-                    )
-                  )}
-                </div>
-              )}
+                    </div>
 
-              {showPredictions && predictions.history && (
-                <div className="bg-white mt-6 p-4 rounded-xl shadow-md max-w-3xl mx-auto">
-                  <h3 className="text-lg font-semibold text-center mb-2">Price Predictions (Next 5 Days)</h3>
-                  <ResponsiveContainer width="100%" height={250}>
-                    <LineChart data={[...predictions.history, ...predictions.predictions]}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="time" tick={{ fontSize: 10 }} />
-                      <YAxis domain={['auto', 'auto']} />
-                      <Tooltip />
-                      <Legend />
+                    {/* Range Selector */}
+                    <div className="flex gap-2 justify-center animate-slide-up delay-200">
+                      {rangeOptions.map(({ label, value, interval }) => (
+                        <RangeButton
+                          key={value}
+                          label={label}
+                          active={range.value === value}
+                          onClick={() => {
+                            setRange({ value, interval });
+                            fetchStock(symbol, value, interval);
+                          }}
+                        />
+                      ))}
+                    </div>
 
-                      {/* Historical prices */}
-                      <Line
-                        type="monotone"
-                        dataKey="price"
-                        stroke="#2563eb"
-                        strokeWidth={2}
-                        dot={false}
-                        name="Historical Price"
-                      />
+                    {/* Price Chart */}
+                    {chartData.length > 0 && (
+                      <div className="chart-container animate-slide-up delay-300">
+                        <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                          <Activity size={20} className="text-accent-cyan" />
+                          Price Chart
+                        </h3>
+                        
+                        <ResponsiveContainer width="100%" height={350}>
+                          <AreaChart data={showPredictions && predictions.length > 0 ? predictions : chartData}>
+                            <defs>
+                              <linearGradient id="priceGradient" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stopColor="#06b6d4" stopOpacity={0.3} />
+                                <stop offset="100%" stopColor="#06b6d4" stopOpacity={0} />
+                              </linearGradient>
+                              <linearGradient id="predictGradient" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stopColor="#a855f7" stopOpacity={0.3} />
+                                <stop offset="100%" stopColor="#a855f7" stopOpacity={0} />
+                              </linearGradient>
+                            </defs>
+                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(71, 85, 105, 0.3)" />
+                            <XAxis
+                              dataKey="time"
+                              tick={{ fontSize: 11, fill: '#94a3b8' }}
+                              tickLine={{ stroke: '#475569' }}
+                              axisLine={{ stroke: '#475569' }}
+                            />
+                            <YAxis
+                              domain={['auto', 'auto']}
+                              tick={{ fontSize: 11, fill: '#94a3b8' }}
+                              tickLine={{ stroke: '#475569' }}
+                              axisLine={{ stroke: '#475569' }}
+                              tickFormatter={(v) => `$${v}`}
+                            />
+                            <Tooltip content={<CustomChartTooltip />} />
+                            <Legend
+                              wrapperStyle={{ paddingTop: '20px' }}
+                              formatter={(value) => (
+                                <span className="text-gray-300 text-sm">
+                                  {value === "sma_10" ? "SMA 10" : value === "price" ? "Price" : value}
+                                </span>
+                              )}
+                            />
+                            
+                            <Area
+                              type="monotone"
+                              dataKey="price"
+                              stroke="#06b6d4"
+                              strokeWidth={2}
+                              fill="url(#priceGradient)"
+                              dot={false}
+                              name="Price"
+                            />
+                            <Line
+                              type="monotone"
+                              dataKey="sma_10"
+                              stroke="#f97316"
+                              strokeWidth={2}
+                              dot={false}
+                              name="SMA 10"
+                            />
+                            
+                            {showPredictions && (
+                              <Area
+                                type="monotone"
+                                dataKey="predicted"
+                                stroke="#a855f7"
+                                strokeWidth={2}
+                                strokeDasharray="5 5"
+                                fill="url(#predictGradient)"
+                                dot={{ fill: '#a855f7', r: 4 }}
+                                name="Predicted"
+                                connectNulls={false}
+                              />
+                            )}
+                            
+                            {anomalyData.map((point, index) => (
+                              <ReferenceDot
+                                key={`anomaly-${point.timestamp || index}`}
+                                x={point.time}
+                                y={point.price}
+                                r={6}
+                                fill="#f43f5e"
+                                stroke="#fff"
+                                strokeWidth={2}
+                              />
+                            ))}
+                            
+                            <Brush
+                              dataKey="time"
+                              height={40}
+                              stroke="#06b6d4"
+                              fill="#1e293b"
+                              tickFormatter={() => ''}
+                            />
+                          </AreaChart>
+                        </ResponsiveContainer>
 
-                      {/* Predicted prices */}
-                      <Line
-                        type="monotone"
-                        dataKey="predicted"
-                        stroke="#9333ea"
-                        strokeWidth={2}
-                        strokeDasharray="5 5"
-                        dot={{ fill: '#9333ea', r: 4 }}
-                        name="Predicted Price"
-                      />
-                    </LineChart>
-                  </ResponsiveContainer>
-
-                  <div className="mt-4 text-xs text-gray-500 text-center">
-                    Note: Predictions are based on {selectedAlgorithm.replace('_', ' ')} and should not be used as financial advice.
-                  </div>
-                </div>
-              )}
-
-              {/* Algorithm Comparison Section */}
-              {showComparison && algorithmComparison && (
-                <div className="bg-white mt-6 p-4 rounded-xl shadow-md max-w-4xl mx-auto">
-                  <h3 className="text-lg font-semibold text-center mb-4">🔬 Algorithm Performance Comparison</h3>
-                  
-                  <div className="mb-4 p-3 bg-green-50 border border-green-300 rounded-lg">
-                    <p className="text-green-800 text-sm">
-                      <strong>Best Algorithm:</strong> {algorithmComparison.best_algorithm?.replace('_', ' ').toUpperCase()} 
-                      (R² = {algorithmComparison.best_r2_score?.toFixed(3)})
-                    </p>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {Object.entries(algorithmComparison.comparison).map(([algorithm, metrics]) => (
-                      <div key={algorithm} className="border border-gray-200 rounded-lg p-3">
-                        <h4 className="font-semibold text-gray-800 mb-2">
-                          {algorithm.replace('_', ' ').toUpperCase()}
-                        </h4>
-                        {metrics.error ? (
-                          <p className="text-red-600 text-sm">Error: {metrics.error}</p>
-                        ) : (
-                          <div className="space-y-1 text-sm">
-                            <div className="flex justify-between">
-                              <span>R² Score:</span>
-                              <span className={`font-medium ${metrics.r2 > 0.7 ? 'text-green-600' : metrics.r2 > 0.4 ? 'text-yellow-600' : 'text-red-600'}`}>
-                                {metrics.r2?.toFixed(3)}
-                              </span>
+                        {/* Prediction Info */}
+                        {showPredictions && modelMetrics && (
+                          <div className="mt-6 p-4 bg-chart-purple/10 border border-chart-purple/30 rounded-xl">
+                            <h4 className="font-semibold text-chart-purple mb-3 flex items-center gap-2">
+                              <Brain size={18} />
+                              ML Prediction Results
+                            </h4>
+                            <div className="grid grid-cols-3 gap-4 mb-4">
+                              <div className="text-center p-3 bg-dark-800 rounded-lg">
+                                <p className="text-xs text-gray-400 mb-1">R² Score</p>
+                                <p className="font-mono font-bold text-white">{modelMetrics.r2?.toFixed(3)}</p>
+                              </div>
+                              <div className="text-center p-3 bg-dark-800 rounded-lg">
+                                <p className="text-xs text-gray-400 mb-1">MAE</p>
+                                <p className="font-mono font-bold text-white">${modelMetrics.mae?.toFixed(2)}</p>
+                              </div>
+                              <div className="text-center p-3 bg-dark-800 rounded-lg">
+                                <p className="text-xs text-gray-400 mb-1">MSE</p>
+                                <p className="font-mono font-bold text-white">{modelMetrics.mse?.toFixed(2)}</p>
+                              </div>
                             </div>
-                            <div className="flex justify-between">
-                              <span>MAE:</span>
-                              <span className="font-medium">${metrics.mae?.toFixed(2)}</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span>MSE:</span>
-                              <span className="font-medium">{metrics.mse?.toFixed(2)}</span>
-                            </div>
+                            <p className="text-xs text-gray-400 bg-dark-800 p-3 rounded-lg">
+                              ⚠️ <strong>Disclaimer:</strong> Predictions are for educational purposes only. Not financial advice.
+                            </p>
                           </div>
                         )}
+
+                        {/* Anomaly Summary */}
+                        {!showPredictions && anomalyData.length > 0 && (
+                          <div className="mt-6 p-4 bg-loss/10 border border-loss/30 rounded-xl">
+                            <h4 className="font-semibold text-loss mb-2">⚠️ {anomalyData.length} Anomalies Detected</h4>
+                            <p className="text-sm text-gray-400">
+                              Significant price deviations from the moving average detected in this timeframe.
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Algorithm Comparison */}
+                    {showComparison && algorithmComparison && (
+                      <div className="glass-card p-6 animate-slide-up">
+                        <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                          <Zap size={20} className="text-gain" />
+                          Algorithm Comparison
+                        </h3>
+                        
+                        <div className="p-3 bg-gain/10 border border-gain/30 rounded-xl mb-6">
+                          <p className="text-gain text-sm">
+                            <strong>Best Algorithm:</strong> {algorithmComparison.best_algorithm?.replace('_', ' ').toUpperCase()} 
+                            <span className="font-mono ml-2">(R² = {algorithmComparison.best_r2_score?.toFixed(3)})</span>
+                          </p>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {Object.entries(algorithmComparison.comparison).map(([algorithm, metrics]) => (
+                            <div
+                              key={algorithm}
+                              className={`p-4 rounded-xl border ${
+                                algorithm === algorithmComparison.best_algorithm
+                                  ? 'border-gain/50 bg-gain/5'
+                                  : 'border-dark-600 bg-dark-800/50'
+                              }`}
+                            >
+                              <h4 className="font-semibold text-white mb-3 flex items-center gap-2">
+                                {algorithm.replace('_', ' ').toUpperCase()}
+                                {algorithm === algorithmComparison.best_algorithm && (
+                                  <span className="badge-gain text-[10px]">BEST</span>
+                                )}
+                              </h4>
+                              {metrics.error ? (
+                                <p className="text-loss text-sm">Error: {metrics.error}</p>
+                              ) : (
+                                <div className="space-y-2 text-sm">
+                                  <div className="flex justify-between">
+                                    <span className="text-gray-400">R² Score:</span>
+                                    <span className={`font-mono font-medium ${
+                                      metrics.r2 > 0.7 ? 'text-gain' : metrics.r2 > 0.4 ? 'text-chart-orange' : 'text-loss'
+                                    }`}>
+                                      {metrics.r2?.toFixed(3)}
+                                    </span>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span className="text-gray-400">MAE:</span>
+                                    <span className="font-mono text-gray-300">${metrics.mae?.toFixed(2)}</span>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span className="text-gray-400">MSE:</span>
+                                    <span className="font-mono text-gray-300">{metrics.mse?.toFixed(2)}</span>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            ) : (
+              /* Watchlist View */
+              <div className="glass-card p-6 animate-fade-in">
+                <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
+                  <Star size={24} className="text-chart-orange" />
+                  Your Watchlist
+                </h2>
+
+                {watchlist.length === 0 ? (
+                  <div className="text-center py-12">
+                    <Star size={48} className="text-dark-600 mx-auto mb-4" />
+                    <p className="text-gray-400">Your watchlist is empty</p>
+                    <p className="text-sm text-gray-500 mt-2">Add stocks to track them here</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3 mb-6">
+                    {watchlist.map(item => (
+                      <div key={item.id} className="watchlist-item">
+                        <button
+                          onClick={async () => {
+                            setData(null);
+                            setChartData([]);
+                            setNews([]);
+                            setError("");
+                            setPredictions([]);
+                            setShowPredictions(false);
+                            setSymbol(item.symbol);
+                            setLoading(true);
+
+                            try {
+                              await fetchStock(item.symbol, range.value, range.interval);
+                              const res = await axios.get(`${API_URL}/news?symbol=${item.symbol}`);
+                              setNews(res.data.news || []);
+                            } catch (err) {
+                              setError("Failed to load stock data: " + err.message);
+                            }
+
+                            setLoading(false);
+                            setViewMode("chart");
+                          }}
+                          className="font-mono font-semibold text-accent-cyan hover:text-accent-cyan-light transition-colors"
+                        >
+                          {item.symbol}
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            removeFromWatchlist(item.id);
+                          }}
+                          className="p-2 text-gray-500 hover:text-loss hover:bg-loss/10 rounded-lg transition-all"
+                        >
+                          <Trash2 size={18} />
+                        </button>
                       </div>
                     ))}
                   </div>
+                )}
 
-                  <div className="mt-4 p-3 bg-blue-50 border border-blue-300 rounded-lg">
-                    <h5 className="font-semibold text-blue-800 mb-2">📈 Algorithm Descriptions:</h5>
-                    <div className="text-sm text-blue-700 space-y-1">
-                      <p><strong>Linear Regression:</strong> Simple trend-based prediction using time as the only feature.</p>
-                      <p><strong>Random Forest:</strong> Ensemble method using multiple decision trees with technical indicators.</p>
-                      <p><strong>XGBoost:</strong> Gradient boosting algorithm optimized for performance and accuracy.</p>
-                      <p><strong>LightGBM:</strong> Fast gradient boosting framework with efficient memory usage.</p>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          </>
-        ) : (
-          <>
-            {/* Watchlist Section */}
-            <div className="w-full lg:w-3/4 max-h-full overflow-auto bg-white p-6 rounded-xl shadow-md space-y-2">
-              <h3 className="text-lg font-semibold mb-4">⭐ Your Watchlist</h3>
-              <ul className="space-y-2">
-                {watchlist.map(item => (
-                  <li
-                    key={item.id}
-                    className="flex justify-between items-center border-b pb-2 cursor-pointer hover:bg-gray-100 p-2 rounded-md"
-                  >
-                    {/* Clickable Symbol */}
-                    <span
-                      className="font-medium text-blue-600 hover:underline"
-                      onClick={async () => {
-                        // Clear old data first
-                        setData(null);
-                        setChartData([]);
-                        setNews([]);
-                        setError("");
-
-                        // Clear predictions
-                        setPredictions([]);
-                        setShowPredictions(false);
-
-                        // Set new symbol
-                        setSymbol(item.symbol);
-
-                        // Show loading state
-                        setLoading(true);
-
+                {/* Add to Watchlist */}
+                <div className="flex gap-3 pt-4 border-t border-dark-600">
+                  <input
+                    type="text"
+                    placeholder="Add symbol (e.g. NVDA)"
+                    className="input-field flex-1"
+                    onKeyDown={async (e) => {
+                      if (e.key === "Enter") {
+                        const sym = e.target.value.trim().toUpperCase();
+                        if (!sym) return;
                         try {
-                          // Fetch new data
-                          await fetchStock(item.symbol, range.value, range.interval);
-
-                          // Fetch news for the new symbol
-                          const res = await axios.get(`${API_URL}/news?symbol=${item.symbol}`);
-                          setNews(res.data.news || []);
-
-                        } catch (err) {
-                          setPopupMessage("⚠️ Error loading stock data. Please try again.");
+                          const response = await fetch(`${API_URL}/price?symbol=${sym}`);
+                          if (response.ok) {
+                            await addToWatchlist(sym);
+                            e.target.value = "";
+                          } else {
+                            setPopupMessage("Invalid stock symbol");
+                            setShowPopup(true);
+                          }
+                        } catch {
+                          setPopupMessage("Error validating symbol");
                           setShowPopup(true);
-                          setError("Failed to load stock data: " + err.message);
                         }
-
-                        setLoading(false);
-                        setViewMode("chart");
-                      }}
-                    >
-                      {item.symbol}
-                    </span>
-
-                    {/* Remove button */}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation(); // prevent triggering the chart load
-                        removeFromWatchlist(item.id);
-                      }}
-                      className="text-red-500 text-sm"
-                    >
-                      Remove
-                    </button>
-                  </li>
-                ))}
-              </ul>
-
-
-              {/* Watchlist Add Bar */}
-              <div className="flex gap-2 mt-4">
-                <input
-                  type="text"
-                  placeholder="Add symbol (e.g. AAPL)"
-                  className="flex-1 border border-gray-300 p-2 rounded-md"
-                  onKeyDown={async (e) => {
-                    if (e.key === "Enter") {
-                      const symbol = e.target.value.trim().toUpperCase();
-
-                      if (!symbol) {
-                        alert("Please enter a symbol");
-                        return;
                       }
-
+                    }}
+                  />
+                  <button
+                    onClick={async () => {
+                      const input = document.querySelector('input[placeholder="Add symbol (e.g. NVDA)"]');
+                      const sym = input.value.trim().toUpperCase();
+                      if (!sym) return;
                       try {
-                        const response = await fetch(`${API_URL}/price?symbol=${symbol}`);
+                        const response = await fetch(`${API_URL}/price?symbol=${sym}`);
                         if (response.ok) {
-                          await addToWatchlist(symbol);
-                          e.target.value = "";
+                          await addToWatchlist(sym);
+                          input.value = "";
                         } else {
-                          alert("Invalid stock symbol. Please try again.");
+                          setPopupMessage("Invalid stock symbol");
+                          setShowPopup(true);
                         }
-                      } catch (error) {
-                        alert("Error validating symbol. Please try again.");
+                      } catch {
+                        setPopupMessage("Error validating symbol");
+                        setShowPopup(true);
                       }
-                    }
-                  }}
-                />
-                <button
-                  onClick={async () => {
-                    const input = document.querySelector('input[placeholder="Add symbol (e.g. AAPL)"]');
-                    const symbol = input.value.trim().toUpperCase();
-
-                    if (!symbol) {
-                      alert("Please enter a symbol");
-                      return;
-                    }
-
-                    // Validate symbol by checking if it exists
-                    try {
-                      const response = await fetch(`${API_URL}/price?symbol=${symbol}`);
-                      if (response.ok) {
-                        await addToWatchlist(symbol);
-                        input.value = "";
-                      } else {
-                        alert("Invalid stock symbol. Please try again.");
-                      }
-                    } catch (error) {
-                      alert("Error validating symbol. Please try again.");
-                    }
-                  }}
-                  className="bg-blue-600 text-white px-3 py-1 rounded-md hover:bg-blue-700"
-                >
-                  Add
-                </button>
+                    }}
+                    className="btn-primary flex items-center gap-2"
+                  >
+                    <Plus size={18} />
+                    Add
+                  </button>
+                </div>
               </div>
-            </div>
-          </>
-        )}
-      </div>
-
-      {showPopup && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
-          <div className="bg-white p-6 rounded-xl shadow-lg max-w-sm text-center">
-            <h2 className="text-lg font-semibold mb-2">Important</h2>
-            <p className="text-sm text-gray-600 mb-4">{popupMessage}</p>
-            <button
-              onClick={() => setShowPopup(false)}
-              className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
-            >
-              OK
-            </button>
+            )}
           </div>
         </div>
-      )}
 
-      {/* News & Sentiment Card */}
-      {news.length > 0 && (
-        <div className="flex flex-col lg:flex-row gap-4 overflow-hidden">
-          <div className="bg-white p-7 rounded-xl shadow-md mx-3 w-full">
-            <h3 className="text-lg font-semibold text-center mb-4">📰 News Sentiment & Headlines</h3>
+        {/* News Section */}
+        {news.length > 0 && viewMode === "chart" && (
+          <div className="mt-8 glass-card p-6 animate-slide-up">
+            <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
+              📰 News & Sentiment Analysis
+            </h3>
 
-            <div className="flex flex-col lg:flex-row gap-6 p-3">
-              {/* Left side: Sentiment Summary + Chart */}
-              <div className="w-full lg:w-1/2 space-y-4 p-2">
-                {/* Sentiment Summary */}
-                <div className="flex justify-around text-sm font-medium">
-                  <span className="text-green-600">Positive: {news.filter(n => n.sentiment === "Positive").length}</span>
-                  <span className="text-yellow-600">Neutral: {news.filter(n => n.sentiment === "Neutral").length}</span>
-                  <span className="text-red-600">Negative: {news.filter(n => n.sentiment === "Negative").length}</span>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              {/* Sentiment Chart */}
+              <div>
+                <div className="flex justify-around text-sm font-medium mb-4">
+                  <span className="flex items-center gap-2">
+                    <span className="w-3 h-3 rounded-full bg-gain" />
+                    Positive: {news.filter(n => n.sentiment === "Positive").length}
+                  </span>
+                  <span className="flex items-center gap-2">
+                    <span className="w-3 h-3 rounded-full bg-gray-500" />
+                    Neutral: {news.filter(n => n.sentiment === "Neutral").length}
+                  </span>
+                  <span className="flex items-center gap-2">
+                    <span className="w-3 h-3 rounded-full bg-loss" />
+                    Negative: {news.filter(n => n.sentiment === "Negative").length}
+                  </span>
                 </div>
 
-                {/* Sentiment Chart */}
-                <ResponsiveContainer width="100%" height={250}>
+                <ResponsiveContainer width="100%" height={200}>
                   <BarChart data={news.map(n => ({
                     time: new Date(n.published_at).toLocaleTimeString("en-US", {
                       hour: "2-digit",
                       minute: "2-digit",
                     }),
                     sentiment_score: n.sentiment_score,
+                    sentiment: n.sentiment
                   }))}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="time" />
-                    <YAxis domain={[-1, 1]} />
-                    <Tooltip />
-                    <Bar dataKey="sentiment_score">
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(71, 85, 105, 0.3)" />
+                    <XAxis dataKey="time" tick={{ fontSize: 11, fill: '#94a3b8' }} />
+                    <YAxis domain={[-1, 1]} tick={{ fontSize: 11, fill: '#94a3b8' }} />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: '#1e293b',
+                        border: '1px solid #334155',
+                        borderRadius: '8px'
+                      }}
+                    />
+                    <Bar dataKey="sentiment_score" radius={[4, 4, 0, 0]}>
                       {news.map((n, idx) => (
                         <Cell
                           key={idx}
                           fill={
-                            n.sentiment === "Positive"
-                              ? "#16a34a" // green
-                              : n.sentiment === "Negative"
-                                ? "#dc2626" // red
-                                : "#9ca3af" // gray
+                            n.sentiment === "Positive" ? "#10b981"
+                            : n.sentiment === "Negative" ? "#f43f5e"
+                            : "#64748b"
                           }
                         />
                       ))}
@@ -835,22 +1022,24 @@ function App() {
                 </ResponsiveContainer>
               </div>
 
-              {/* Right side: Headlines List */}
-              <div className="w-full lg:w-1/2 p-2">
-                <h4 className="text-md font-semibold mb-2">Recent Headlines</h4>
-                <ul className="space-y-3">
+              {/* News Headlines */}
+              <div>
+                <h4 className="text-sm font-semibold text-gray-300 mb-4">Recent Headlines</h4>
+                <div className="space-y-3 max-h-[250px] overflow-y-auto pr-2">
                   {news.map((article, idx) => (
-                    <li key={idx} className="flex items-center justify-between border-b pb-2">
-                      <div className="flex-1">
-                        <a
-                          href={article.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-blue-600 hover:underline font-medium"
-                        >
+                    <a
+                      key={idx}
+                      href={article.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="news-item group"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-gray-200 group-hover:text-accent-cyan transition-colors line-clamp-2">
                           {article.headline}
-                        </a>
-                        <p className="text-xs text-gray-500">
+                        </p>
+                        <p className="text-xs text-gray-500 mt-1 flex items-center gap-2">
+                          <Clock size={12} />
                           {new Date(article.published_at).toLocaleString("en-US", {
                             month: "short",
                             day: "numeric",
@@ -859,24 +1048,28 @@ function App() {
                           })}
                         </p>
                       </div>
-                      <span
-                        className={`ml-2 px-2 py-0.5 rounded-full text-xs font-semibold ${article.sentiment === "Positive"
-                          ? "bg-green-100 text-green-700"
-                          : article.sentiment === "Negative"
-                            ? "bg-red-100 text-red-700"
-                            : "bg-gray-200 text-gray-700"
-                          }`}
-                      >
-                        {article.sentiment}
-                      </span>
-                    </li>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <span className={
+                          article.sentiment === "Positive" ? "badge-gain"
+                          : article.sentiment === "Negative" ? "badge-loss"
+                          : "badge-neutral"
+                        }>
+                          {article.sentiment}
+                        </span>
+                        <ExternalLink size={14} className="text-gray-500 group-hover:text-accent-cyan" />
+                      </div>
+                    </a>
                   ))}
-                </ul>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </main>
+
+      {/* Modals */}
+      <HelpModal open={showHelp} onClose={() => setShowHelp(false)} />
+      <Popup show={showPopup} message={popupMessage} onClose={() => setShowPopup(false)} />
     </div>
   );
 }
