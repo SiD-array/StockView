@@ -399,13 +399,13 @@ def get_news(symbol: str, limit: int = 5):
         raise HTTPException(status_code=500, detail=error_detail)
     
 @app.get("/predict")
-def predict(symbol: str, period: str = "3mo", interval: str = "1d", steps: int = 5, algorithm: str = "random_forest"):
+def predict(symbol: str, period: str = "6mo", interval: str = "1d", steps: int = 5, algorithm: str = "random_forest"):
     """
     Advanced stock price prediction with multiple algorithms
     
     Args:
         symbol: Stock symbol
-        period: Data period (1mo, 3mo, 6mo, 1y, 2y)
+        period: Data period (1mo, 3mo, 6mo, 1y, 2y) - minimum 6mo recommended for accurate predictions
         interval: Data interval (1d, 1h, 5m)
         steps: Number of future predictions
         algorithm: Algorithm to use (linear_regression, random_forest, xgboost, lightgbm, cnn)
@@ -425,7 +425,7 @@ def predict(symbol: str, period: str = "3mo", interval: str = "1d", steps: int =
         X, y, feature_cols = prepare_features(data.copy())
         
         if X is None:
-            raise HTTPException(status_code=400, detail="Insufficient data after feature engineering.")
+            raise HTTPException(status_code=400, detail="Insufficient data after feature engineering. Try using a longer period (6mo or 1y).")
 
         predictions = []
         model_metrics = {}
@@ -562,7 +562,7 @@ def get_feature_importance(model, feature_cols, algorithm):
         return None
 
 @app.get("/predict/compare")
-def compare_algorithms(symbol: str, period: str = "3mo", interval: str = "1d", steps: int = 5):
+def compare_algorithms(symbol: str, period: str = "6mo", interval: str = "1d", steps: int = 5):
     """Compare all available algorithms and return their performance metrics"""
     try:
         stock = yf.Ticker(symbol)
@@ -577,7 +577,7 @@ def compare_algorithms(symbol: str, period: str = "3mo", interval: str = "1d", s
         X, y, feature_cols = prepare_features(data.copy())
         
         if X is None:
-            raise HTTPException(status_code=400, detail="Insufficient data after feature engineering.")
+            raise HTTPException(status_code=400, detail="Insufficient data after feature engineering. Try using a longer period (6mo or 1y).")
 
         algorithms = ["linear_regression", "random_forest", "xgboost", "lightgbm"]
         results = {}

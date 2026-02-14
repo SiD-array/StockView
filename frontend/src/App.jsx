@@ -244,7 +244,7 @@ function App() {
   const fetchPredictions = useCallback(async (symbolOverride = symbol, algorithm = selectedAlgorithm) => {
     setPredictionLoading(true);
     try {
-      const response = await fetch(`${API_URL}/predict?symbol=${symbolOverride}&period=3mo&interval=1d&steps=5&algorithm=${algorithm}`);
+      const response = await fetch(`${API_URL}/predict?symbol=${symbolOverride}&period=6mo&interval=1d&steps=5&algorithm=${algorithm}`);
       if (!response.ok) throw new Error("Failed to fetch predictions");
 
       const predictionData = await response.json();
@@ -266,7 +266,7 @@ function App() {
 
   const fetchAlgorithmComparison = useCallback(async (symbolOverride = symbol) => {
     try {
-      const response = await fetch(`${API_URL}/predict/compare?symbol=${symbolOverride}&period=3mo&interval=1d&steps=5`);
+      const response = await fetch(`${API_URL}/predict/compare?symbol=${symbolOverride}&period=6mo&interval=1d&steps=5`);
       if (!response.ok) throw new Error("Failed to fetch algorithm comparison");
 
       const comparisonData = await response.json();
