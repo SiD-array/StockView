@@ -1,0 +1,39 @@
+============================================================
+StockView Model Evaluation Report
+============================================================
+
+Symbols evaluated: AAPL, MSFT, TSLA, GOOGL, AMZN
+Train/Test split: 80% / 20% (chronological)
+Data period: 1y | Interval: 1d
+
+------------------------------------------------------------
+SUMMARY METRICS (averaged across models and symbols)
+------------------------------------------------------------
+Average MAPE: 6.15%
+Average RMSE: $23.83
+Average R²:   -1.5519
+
+------------------------------------------------------------
+MODEL RANKINGS
+------------------------------------------------------------
+Best performing model:  Random Forest (R² = -1.0218, MAPE = 5.13%)
+Worst performing model: Linear Regression (R² = -2.9342, MAPE = 9.10%)
+
+------------------------------------------------------------
+DETAILED RESULTS
+------------------------------------------------------------
+Random Forest [AVERAGE]: MAE=$17.60, RMSE=$20.65, MAPE=5.13%, R²=-1.0218
+LightGBM [AVERAGE]: MAE=$17.49, RMSE=$20.34, MAPE=5.17%, R²=-1.1086
+XGBoost [AVERAGE]: MAE=$17.68, RMSE=$20.67, MAPE=5.21%, R²=-1.1433
+Linear Regression [AVERAGE]: MAE=$30.96, RMSE=$33.64, MAPE=9.10%, R²=-2.9342
+
+------------------------------------------------------------
+RECOMMENDATIONS
+------------------------------------------------------------
+1. Default algorithm: Use 'Random Forest' as the primary forecasting model — it achieved the highest R² (-1.0218) on the held-out test set.
+2. Avoid 'Linear Regression' for production predictions — negative R² (-2.9342) indicates it underperforms a simple mean baseline.
+3. Among tree-based models, Random Forest performed best (MAPE = 5.13%). Engineered features help tree models capture non-linear price dynamics.
+4. CNN was not evaluated (TensorFlow unavailable). Install tensorflow-cpu on Python 3.11 to include CNN in comparisons.
+5. Average MAPE (6.15%) is relatively high. Extend the training window (2y+), add macro features, or implement walk-forward validation.
+
+============================================================

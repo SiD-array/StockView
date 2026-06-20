@@ -12,10 +12,6 @@ from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score # 
 from sklearn.preprocessing import StandardScaler # type: ignore
 import xgboost as xgb # type: ignore
 import lightgbm as lgb # type: ignore
-import tensorflow as tf # type: ignore
-from tensorflow.keras.models import Sequential # type: ignore
-from tensorflow.keras.layers import Conv1D, MaxPooling1D, Flatten, Dense, Dropout # type: ignore
-from tensorflow.keras.optimizers import Adam # type: ignore
 import ta # type: ignore
 from fastapi import FastAPI, HTTPException # type: ignore
 from fastapi.middleware.cors import CORSMiddleware # type: ignore
@@ -131,6 +127,10 @@ def create_cnn_sequences(data, sequence_length=10):
 
 def build_cnn_model(input_shape):
     """Build CNN model for time series prediction"""
+    from tensorflow.keras.models import Sequential # type: ignore
+    from tensorflow.keras.layers import Conv1D, MaxPooling1D, Flatten, Dense, Dropout # type: ignore
+    from tensorflow.keras.optimizers import Adam # type: ignore
+
     model = Sequential([
         Conv1D(filters=64, kernel_size=3, activation='relu', input_shape=input_shape),
         MaxPooling1D(pool_size=2),
@@ -491,7 +491,7 @@ def predict(symbol: str, period: str = "6mo", interval: str = "1d", steps: int =
                 last_features[0, -1] = pred
                 
         elif algorithm == "cnn":
-            # For CNN, we use price sequences
+            # For CNN, we use price sequences (TensorFlow loaded lazily in build_cnn_model)
             price_data = data['Close'].values
             model, metrics = train_cnn(price_data, price_data, sequence_length=10)
             
