@@ -1,11 +1,22 @@
 """Application configuration loaded from environment variables."""
 
 import os
+from pathlib import Path
 
 # yfinance must be configured before import
 os.environ.setdefault("YFINANCE_DISABLE_CURL_CFFI", "1")
 
-NEWS_API_KEY = os.environ.get("NEWS_API_KEY", "")
+# Load backend/.env for local development (Render/Vercel use dashboard env vars)
+_env_path = Path(__file__).resolve().parent / ".env"
+if _env_path.exists():
+    try:
+        from dotenv import load_dotenv  # type: ignore
+
+        load_dotenv(_env_path)
+    except ImportError:
+        pass
+
+NEWS_API_KEY = os.environ.get("NEWS_API_KEY", "").strip().strip('"').strip("'")
 NEWS_URL = "https://newsapi.org/v2/everything"
 
 # Comma-separated origins, e.g. "https://stock-view-ebon.vercel.app,http://localhost:5173"
