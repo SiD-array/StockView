@@ -17,7 +17,12 @@ if _env_path.exists():
         pass
 
 NEWS_API_KEY = os.environ.get("NEWS_API_KEY", "").strip().strip('"').strip("'")
-NEWS_URL = "https://newsapi.org/v2/everything"
+NEWS_URL = os.environ.get("NEWS_URL", "https://newsapi.org/v2/everything").strip()
+
+
+def get_news_api_key() -> str:
+    """Read NEWS_API_KEY at call time so Render env updates apply after redeploy."""
+    return os.environ.get("NEWS_API_KEY", "").strip().strip('"').strip("'")
 
 # Comma-separated origins, e.g. "https://stock-view-ebon.vercel.app,http://localhost:5173"
 CORS_ORIGINS = [

@@ -20,9 +20,9 @@ from cache import TTLCache
 from config import (
     CORS_ORIGINS,
     MODEL_CACHE_TTL_SECONDS,
-    NEWS_API_KEY,
     NEWS_URL,
     VALID_ALGORITHMS,
+    get_news_api_key,
 )
 from data import download_stock_data
 from features import prepare_features
@@ -128,7 +128,13 @@ def _compare_all_algorithms(data: pd.DataFrame, X, y) -> dict:
 
 @app.get("/")
 def health_check():
-    return {"status": "healthy", "message": "StockView API is running"}
+    news_key = get_news_api_key()
+    return {
+        "status": "healthy",
+        "message": "StockView API is running",
+        "news_configured": bool(news_key),
+        "news_url": NEWS_URL,
+    }
 
 
 @app.get("/price")
@@ -213,10 +219,14 @@ def get_history(symbol: str, range: str = "1d", interval: str = "5m"):
 
 @app.get("/news")
 def get_news(symbol: str, limit: int = 5):
-    if not NEWS_API_KEY:
+    api_key = get_news_api_key()
+    if not api_key:
         raise HTTPException(
             status_code=503,
-            detail="News API is not configured. Set NEWS_API_KEY environment variable.",
+            detail=(
+                "News API is not configured. Set NEWS_API_KEY in Render Environment, "
+                "then click Manual Deploy → Deploy latest commit."
+            ),
         )
 
     try:
@@ -225,11 +235,28 @@ def get_news(symbol: str, limit: int = 5):
             "sortBy": "publishedAt",
             "language": "en",
             "pageSize": limit,
-            "apiKey": NEWS_API_KEY,
+            "apiKey": api_key,
         }
         response = requests.get(NEWS_URL, params=params, timeout=10)
         if response.status_code != 200:
-            raise HTTPException(status_code=response.status_code, detail="News API error")
+            detail = "News API error"
+            try:
+                body = response.json()
+                detail = body.get("message", body.get("code", detail))
+            except Exception:
+                detail = response.text or detail
+
+            if response.status_code == 426:
+                raise HTTPException(
+                    status_code=503,
+                    detail=(
+                        "NewsAPI free Developer plan cannot be used on production servers "
+                        f"(NewsAPI: {detail}). Use localhost for news, upgrade at newsapi.org/pricing, "
+                        "or switch to a production-ready news provider."
+                    ),
+                )
+
+            raise HTTPException(status_code=response.status_code, detail=detail)
 
         analyzer = SentimentIntensityAnalyzer()
         news_data = []

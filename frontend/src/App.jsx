@@ -319,15 +319,18 @@ function App() {
       setPredictions([]);
       setShowPredictions(false);
     } catch (err) {
+      const apiDetail = err.response?.data?.detail;
+      const errorMessage = apiDetail || err.message || "Unknown error occurred";
+
       if (err.message && err.message.includes('Network Error')) {
         setPopupMessage(`Cannot connect to backend API.`);
       } else if (err.message && err.message.includes('404')) {
         setPopupMessage("Stock symbol not found. Please enter a valid symbol.");
       } else {
-        setPopupMessage(`Error: ${err.message || 'Unknown error occurred'}`);
+        setPopupMessage(`Error: ${errorMessage}`);
       }
       setShowPopup(true);
-      setError(err.message || "Stock not found or API error");
+      setError(errorMessage);
       setNews([]);
     }
     setLoading(false);
