@@ -29,17 +29,17 @@ from typing import Any
 import matplotlib.pyplot as plt  # type: ignore
 import numpy as np  # type: ignore
 import pandas as pd  # type: ignore
-import yfinance as yf  # type: ignore
 from sklearn.linear_model import LinearRegression  # type: ignore
 from sklearn.ensemble import RandomForestRegressor  # type: ignore
-from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score  # type: ignore
 import xgboost as xgb  # type: ignore
 import lightgbm as lgb  # type: ignore
 
-# Reuse StockView preprocessing and feature engineering (no TensorFlow dependency)
-from main import (
+from data import download_stock_data
+from features import prepare_features
+from metrics import chronological_split, compute_metrics, calculate_mape
+from models.training import (
+    build_cnn_model,
     create_cnn_sequences,
-    prepare_features,
 )
 
 warnings.filterwarnings("ignore")
@@ -73,119 +73,6 @@ ALL_MODELS = list(MODEL_DISPLAY_NAMES.keys())
 
 
 # ---------------------------------------------------------------------------
-# Data pipeline
-# ---------------------------------------------------------------------------
-
-def download_stock_data(
-    symbol: str,
-    period: str = DEFAULT_PERIOD,
-    interval: str = DEFAULT_INTERVAL,
-) -> pd.DataFrame:
-    """
-    Download historical OHLCV data using the same yfinance pipeline as StockView.
-
-    Args:
-        symbol: Ticker symbol (e.g. 'AAPL').
-        period: Lookback window passed to yfinance (default: '1y').
-        interval: Bar interval (default: '1d').
-
-    Returns:
-        DataFrame with Open, High, Low, Close, Volume columns.
-
-    Raises:
-        ValueError: If no data is returned or insufficient rows are available.
-    """
-    stock = yf.Ticker(symbol)
-    data = stock.history(period=period, interval=interval)
-
-    if data.empty:
-        raise ValueError(f"No data found for symbol '{symbol}'.")
-
-    if len(data) < 50:
-        raise ValueError(
-            f"Insufficient data for '{symbol}': need at least 50 rows, got {len(data)}."
-        )
-
-    return data
-
-
-def chronological_split(
-    X: pd.DataFrame,
-    y: pd.Series,
-    train_ratio: float = TRAIN_RATIO,
-) -> tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]:
-    """
-    Split feature matrix and target chronologically (no shuffling).
-
-    The first `train_ratio` fraction is used for training; the remainder is
-    reserved for out-of-sample testing to avoid look-ahead bias.
-
-    Args:
-        X: Feature DataFrame indexed by date.
-        y: Target Series aligned with X.
-        train_ratio: Fraction of samples assigned to training (default 0.8).
-
-    Returns:
-        Tuple of (X_train, X_test, y_train, y_test).
-    """
-    split_idx = int(len(X) * train_ratio)
-    if split_idx < 1 or split_idx >= len(X):
-        raise ValueError(
-            f"Cannot split {len(X)} samples at ratio {train_ratio}. "
-            "Try a longer data period."
-        )
-
-    return (
-        X.iloc[:split_idx],
-        X.iloc[split_idx:],
-        y.iloc[:split_idx],
-        y.iloc[split_idx:],
-    )
-
-
-# ---------------------------------------------------------------------------
-# Metrics
-# ---------------------------------------------------------------------------
-
-def calculate_mape(y_true: np.ndarray, y_pred: np.ndarray) -> float:
-    """
-    Compute Mean Absolute Percentage Error (MAPE) in percent.
-
-    Rows where the actual value is zero are excluded to avoid division errors.
-    """
-    y_true = np.asarray(y_true, dtype=float)
-    y_pred = np.asarray(y_pred, dtype=float)
-    mask = y_true != 0
-
-    if not mask.any():
-        return float("nan")
-
-    return float(np.mean(np.abs((y_true[mask] - y_pred[mask]) / y_true[mask])) * 100)
-
-
-def calculate_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> dict[str, float]:
-    """
-    Calculate all evaluation metrics for a set of predictions.
-
-    Args:
-        y_true: Ground-truth target values.
-        y_pred: Model predictions aligned with y_true.
-
-    Returns:
-        Dict with keys: mae, rmse, mape, r2.
-    """
-    y_true = np.asarray(y_true, dtype=float)
-    y_pred = np.asarray(y_pred, dtype=float)
-
-    mae = float(mean_absolute_error(y_true, y_pred))
-    rmse = float(np.sqrt(mean_squared_error(y_true, y_pred)))
-    mape = calculate_mape(y_true, y_pred)
-    r2 = float(r2_score(y_true, y_pred))
-
-    return {"mae": mae, "rmse": rmse, "mape": mape, "r2": r2}
-
-
-# ---------------------------------------------------------------------------
 # Per-model evaluators (chronological 80/20 split)
 # ---------------------------------------------------------------------------
 
@@ -208,7 +95,7 @@ def evaluate_linear_regression_model(data: pd.DataFrame) -> dict[str, Any]:
 
     y_pred = model.predict(test_df[["Index"]])
     y_true = test_df["Close"].values
-    metrics = calculate_metrics(y_true, y_pred)
+    metrics = compute_metrics(y_true, y_pred)
 
     return {
         "model_key": "linear_regression",
@@ -234,7 +121,7 @@ def evaluate_random_forest_model(X: pd.DataFrame, y: pd.Series) -> dict[str, Any
 
     y_pred = model.predict(X_test)
     y_true = y_test.values
-    metrics = calculate_metrics(y_true, y_pred)
+    metrics = compute_metrics(y_true, y_pred)
 
     return {
         "model_key": "random_forest",
@@ -261,7 +148,7 @@ def evaluate_xgboost_model(X: pd.DataFrame, y: pd.Series) -> dict[str, Any]:
 
     y_pred = model.predict(X_test)
     y_true = y_test.values
-    metrics = calculate_metrics(y_true, y_pred)
+    metrics = compute_metrics(y_true, y_pred)
 
     return {
         "model_key": "xgboost",
@@ -289,7 +176,7 @@ def evaluate_lightgbm_model(X: pd.DataFrame, y: pd.Series) -> dict[str, Any]:
 
     y_pred = model.predict(X_test)
     y_true = y_test.values
-    metrics = calculate_metrics(y_true, y_pred)
+    metrics = compute_metrics(y_true, y_pred)
 
     return {
         "model_key": "lightgbm",
@@ -304,16 +191,9 @@ def evaluate_cnn_model(data: pd.DataFrame) -> dict[str, Any]:
     """
     Evaluate the 1D CNN on raw Close prices with chronological sequence split.
 
-    Reuses create_cnn_sequences() and build_cnn_model() from main.py.
+    Reuses create_cnn_sequences() and build_cnn_model() from models.training.
     Requires TensorFlow; raises ImportError if unavailable.
     """
-    try:
-        from main import build_cnn_model  # Lazy import triggers TensorFlow load
-    except ImportError as exc:
-        raise ImportError(
-            "CNN evaluation requires TensorFlow. Install with: pip install tensorflow-cpu"
-        ) from exc
-
     price_data = data["Close"].values
     X_seq, y_seq = create_cnn_sequences(price_data, CNN_SEQUENCE_LENGTH)
 
@@ -341,7 +221,7 @@ def evaluate_cnn_model(data: pd.DataFrame) -> dict[str, Any]:
 
     y_pred = model.predict(X_test, verbose=0).flatten()
     y_true = y_test
-    metrics = calculate_metrics(y_true, y_pred)
+    metrics = compute_metrics(y_true, y_pred)
 
     # Align test dates with the Close series (offset by sequence length)
     test_dates = data.index[CNN_SEQUENCE_LENGTH + split_idx :]

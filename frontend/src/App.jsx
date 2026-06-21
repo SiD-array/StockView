@@ -211,7 +211,9 @@ function App() {
   const [predictions, setPredictions] = useState([]);
   const [showPredictions, setShowPredictions] = useState(false);
   const [predictionLoading, setPredictionLoading] = useState(false);
-  const [selectedAlgorithm, setSelectedAlgorithm] = useState("random_forest");
+  const [selectedAlgorithm, setSelectedAlgorithm] = useState("lightgbm");
+  const [recommendedAlgorithm, setRecommendedAlgorithm] = useState(null);
+  const [metricsNote, setMetricsNote] = useState("");
   const [modelMetrics, setModelMetrics] = useState(null);
   const [algorithmComparison, setAlgorithmComparison] = useState(null);
   const [showComparison, setShowComparison] = useState(false);
@@ -311,6 +313,7 @@ function App() {
     setError("");
     try {
       await fetchStock(symbol, range.value, range.interval);
+      await fetchRecommendedAlgorithm(symbol);
       const res = await axios.get(`${API_URL}/news?symbol=${symbol}`);
       setNews(res.data.news || []);
       setPredictions([]);
@@ -330,11 +333,26 @@ function App() {
     setLoading(false);
   };
 
+  // Fetch recommended algorithm for symbol
+  const fetchRecommendedAlgorithm = useCallback(async (symbolOverride = symbol) => {
+    try {
+      const response = await fetch(`${API_URL}/evaluation/recommendation?symbol=${symbolOverride}`);
+      if (!response.ok) return;
+      const data = await response.json();
+      setRecommendedAlgorithm(data.recommended_algorithm);
+      setSelectedAlgorithm(data.recommended_algorithm);
+    } catch {
+      // Keep current selection if recommendation endpoint is unavailable
+    }
+  }, [symbol]);
+
   // Fetch predictions
   const fetchPredictions = useCallback(async (symbolOverride = symbol, algorithm = selectedAlgorithm) => {
     setPredictionLoading(true);
     try {
-      const response = await fetch(`${API_URL}/predict?symbol=${symbolOverride}&period=6mo&interval=1d&steps=5&algorithm=${algorithm}`);
+      const response = await fetch(
+        `${API_URL}/predict?symbol=${symbolOverride}&period=1y&interval=1d&steps=5&algorithm=${algorithm}`
+      );
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         throw new Error(errorData.detail || `Server error: ${response.status}`);
@@ -348,6 +366,10 @@ function App() {
 
       setPredictions(combinedData);
       setModelMetrics(predictionData.model_metrics);
+      setMetricsNote(predictionData.metrics_note || "");
+      if (predictionData.recommended_algorithm) {
+        setRecommendedAlgorithm(predictionData.recommended_algorithm);
+      }
     } catch (err) {
       setError("Failed to load predictions: " + err.message);
     } finally {
@@ -358,10 +380,14 @@ function App() {
   // Fetch algorithm comparison
   const fetchAlgorithmComparison = useCallback(async (symbolOverride = symbol) => {
     try {
-      const response = await fetch(`${API_URL}/predict/compare?symbol=${symbolOverride}&period=6mo&interval=1d&steps=5`);
+      const response = await fetch(`${API_URL}/predict/compare?symbol=${symbolOverride}&period=1y&interval=1d`);
       if (!response.ok) throw new Error("Failed to fetch algorithm comparison");
       const comparisonData = await response.json();
       setAlgorithmComparison(comparisonData);
+      setMetricsNote(comparisonData.metrics_note || "");
+      if (comparisonData.recommended_algorithm) {
+        setRecommendedAlgorithm(comparisonData.recommended_algorithm);
+      }
     } catch (err) {
       setError("Failed to load algorithm comparison: " + err.message);
     }
@@ -593,6 +619,11 @@ function App() {
                     {/* Prediction Controls */}
                     <div className="glass-card p-4 animate-slide-up delay-100">
                       <div className="flex flex-wrap items-center gap-3">
+                        {recommendedAlgorithm && (
+                          <span className="text-xs text-gray-400 bg-dark-800 px-3 py-2 rounded-lg border border-dark-600">
+                            Recommended: <strong className="text-accent-cyan">{recommendedAlgorithm.replace(/_/g, " ")}</strong>
+                          </span>
+                        )}
                         <select
                           value={selectedAlgorithm}
                           onChange={(e) => setSelectedAlgorithm(e.target.value)}
@@ -755,7 +786,7 @@ function App() {
                               <Brain size={18} />
                               ML Prediction Results
                             </h4>
-                            <div className="grid grid-cols-3 gap-4 mb-4">
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
                               <div className="text-center p-3 bg-dark-800 rounded-lg">
                                 <p className="text-xs text-gray-400 mb-1">R² Score</p>
                                 <p className="font-mono font-bold text-white">{modelMetrics.r2?.toFixed(3)}</p>
@@ -765,10 +796,17 @@ function App() {
                                 <p className="font-mono font-bold text-white">${modelMetrics.mae?.toFixed(2)}</p>
                               </div>
                               <div className="text-center p-3 bg-dark-800 rounded-lg">
-                                <p className="text-xs text-gray-400 mb-1">MSE</p>
-                                <p className="font-mono font-bold text-white">{modelMetrics.mse?.toFixed(2)}</p>
+                                <p className="text-xs text-gray-400 mb-1">RMSE</p>
+                                <p className="font-mono font-bold text-white">${modelMetrics.rmse?.toFixed(2)}</p>
+                              </div>
+                              <div className="text-center p-3 bg-dark-800 rounded-lg">
+                                <p className="text-xs text-gray-400 mb-1">MAPE</p>
+                                <p className="font-mono font-bold text-white">{modelMetrics.mape?.toFixed(2)}%</p>
                               </div>
                             </div>
+                            {metricsNote && (
+                              <p className="text-xs text-gray-500 mb-3">{metricsNote}</p>
+                            )}
                             <p className="text-xs text-gray-400 bg-dark-800 p-3 rounded-lg">
                               ⚠️ <strong>Disclaimer:</strong> Predictions are for educational purposes only. Not financial advice.
                             </p>
@@ -797,12 +835,17 @@ function App() {
                         
                         <div className="p-3 bg-gain/10 border border-gain/30 rounded-xl mb-6">
                           <p className="text-gain text-sm">
-                            <strong>Best Algorithm:</strong> {algorithmComparison.best_algorithm?.replace('_', ' ').toUpperCase()} 
+                            <strong>Best Algorithm (holdout):</strong> {algorithmComparison.best_algorithm?.replace(/_/g, ' ').toUpperCase()}
                             <span className="font-mono ml-2">(R² = {algorithmComparison.best_r2_score?.toFixed(3)})</span>
                           </p>
+                          {algorithmComparison.recommended_algorithm && (
+                            <p className="text-gray-400 text-xs mt-1">
+                              Offline recommendation for {symbol.toUpperCase()}: {algorithmComparison.recommended_algorithm.replace(/_/g, ' ')}
+                            </p>
+                          )}
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                           {Object.entries(algorithmComparison.comparison).map(([algorithm, metrics]) => (
                             <div
                               key={algorithm}
@@ -835,8 +878,12 @@ function App() {
                                     <span className="font-mono text-gray-300">${metrics.mae?.toFixed(2)}</span>
                                   </div>
                                   <div className="flex justify-between">
-                                    <span className="text-gray-400">MSE:</span>
-                                    <span className="font-mono text-gray-300">{metrics.mse?.toFixed(2)}</span>
+                                    <span className="text-gray-400">RMSE:</span>
+                                    <span className="font-mono text-gray-300">${metrics.rmse?.toFixed(2)}</span>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span className="text-gray-400">MAPE:</span>
+                                    <span className="font-mono text-gray-300">{metrics.mape?.toFixed(2)}%</span>
                                   </div>
                                 </div>
                               )}

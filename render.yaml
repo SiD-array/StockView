@@ -8,6 +8,10 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.10
+      - key: CORS_ORIGINS
+        value: https://stock-view-ebon.vercel.app
+      - key: NEWS_API_KEY
+        sync: false
     healthCheckPath: /
     plan: free
 
