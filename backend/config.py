@@ -27,6 +27,11 @@ def get_finnhub_api_key() -> str:
     """Finnhub key (quotes, company profile, company news). Free at finnhub.io."""
     return os.environ.get("FINNHUB_API_KEY", "").strip().strip('"').strip("'")
 
+
+def get_redis_url() -> str:
+    """Redis URL (e.g. rediss://default:xxx@...upstash.io:6379)."""
+    return os.environ.get("REDIS_URL", "").strip().strip('"').strip("'")
+
 QUOTE_CACHE_TTL_SECONDS = int(os.environ.get("QUOTE_CACHE_TTL_SECONDS", "30"))
 NEWS_CACHE_TTL_SECONDS = int(os.environ.get("NEWS_CACHE_TTL_SECONDS", "600"))
 

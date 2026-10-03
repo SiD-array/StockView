@@ -31,9 +31,9 @@ __all__ = [
     "get_quote",
 ]
 
-_data_cache = TTLCache(ttl_seconds=DATA_CACHE_TTL_SECONDS, max_size=256)
-_name_cache = TTLCache(ttl_seconds=COMPANY_NAME_CACHE_TTL_SECONDS, max_size=1024)
-_quote_cache = TTLCache(ttl_seconds=QUOTE_CACHE_TTL_SECONDS, max_size=512)
+_data_cache = TTLCache(ttl_seconds=DATA_CACHE_TTL_SECONDS, max_size=256, name="data")
+_name_cache = TTLCache(ttl_seconds=COMPANY_NAME_CACHE_TTL_SECONDS, max_size=1024, name="company")
+_quote_cache = TTLCache(ttl_seconds=QUOTE_CACHE_TTL_SECONDS, max_size=512, name="quote")
 
 
 def _normalize(symbol: str) -> str:

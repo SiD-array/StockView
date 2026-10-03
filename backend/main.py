@@ -15,7 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware  # type: ignore
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer  # type: ignore
 from yfinance.exceptions import YFRateLimitError  # type: ignore
 
-from cache import TTLCache
+from cache import TTLCache, is_redis_active
 from config import (
     CORS_ORIGINS,
     MODEL_CACHE_TTL_SECONDS,
@@ -55,8 +55,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-_model_cache = TTLCache(ttl_seconds=MODEL_CACHE_TTL_SECONDS)
-_news_cache = TTLCache(ttl_seconds=NEWS_CACHE_TTL_SECONDS, max_size=256)
+_model_cache = TTLCache(ttl_seconds=MODEL_CACHE_TTL_SECONDS, name="model")
+_news_cache = TTLCache(ttl_seconds=NEWS_CACHE_TTL_SECONDS, max_size=256, name="news")
 _sentiment = SentimentIntensityAnalyzer()
 
 
@@ -148,6 +148,7 @@ def health_check():
         "providers": {
             "quotes": "finnhub" if finnhub.is_configured() else "yfinance",
             "history": "yfinance",
+            "cache": "redis" if is_redis_active() else "memory",
             "news": "finnhub"
             if finnhub.is_configured()
             else ("newsapi" if get_news_api_key() else None),
