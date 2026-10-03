@@ -55,8 +55,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-_model_cache = TTLCache(ttl_seconds=MODEL_CACHE_TTL_SECONDS, name="model")
-_news_cache = TTLCache(ttl_seconds=NEWS_CACHE_TTL_SECONDS, max_size=256, name="news")
+_model_cache = TTLCache(ttl_seconds=MODEL_CACHE_TTL_SECONDS, max_size=50, name="model", max_stale_seconds=86400)
+_news_cache = TTLCache(ttl_seconds=NEWS_CACHE_TTL_SECONDS, max_size=100, name="news", max_stale_seconds=3600)
 _sentiment = SentimentIntensityAnalyzer()
 
 

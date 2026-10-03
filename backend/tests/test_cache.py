@@ -86,5 +86,52 @@ def test_hybrid_cache_graceful_redis_failure():
         c = TTLCache(ttl_seconds=30, name="data")
         # Should write to memory
         c.set("sym", 999)
-        # On get, redis fails, should smoothly return from memory
         assert c.get("sym") == 999
+
+
+def test_redis_hard_expiration_passed():
+    mock_redis = MagicMock()
+    mock_redis.zcard.return_value = 1
+    mock_redis.info.return_value = {"used_memory": 100, "maxmemory": 1000}
+
+    with patch.object(cache, "get_redis_client", return_value=mock_redis):
+        c = TTLCache(ttl_seconds=30, max_stale_seconds=600, name="quote")
+        c.set("AAPL", {"price": 100})
+
+        # Check that set was called with ex=600
+        assert mock_redis.set.called
+        assert mock_redis.set.call_args[1]["ex"] == 600
+
+
+def test_redis_lru_eviction():
+    mock_redis = MagicMock()
+    # Simulate count exceeding max_size (max_size=2, count=3)
+    mock_redis.zcard.return_value = 3
+    mock_redis.zpopmin.return_value = [("stockview:quote:OLD", 1000.0)]
+    mock_redis.info.return_value = {"used_memory": 100, "maxmemory": 1000}
+
+    with patch.object(cache, "get_redis_client", return_value=mock_redis):
+        c = TTLCache(ttl_seconds=30, max_size=2, name="quote")
+        c.set("NEW", {"price": 200})
+
+        # zpopmin should have been called to pop 1 excess item
+        assert mock_redis.zpopmin.called
+        # And delete should have been called with that popped key
+        mock_redis.delete.assert_any_call("stockview:quote:OLD")
+
+
+def test_redis_memory_guard_triggers_pruning():
+    mock_redis = MagicMock()
+    # 80MB out of 100MB = 80% (exceeds 75% threshold)
+    mock_redis.info.return_value = {"used_memory": 80_000_000, "maxmemory": 100_000_000}
+    mock_redis.zcard.return_value = 8
+    mock_redis.zpopmin.return_value = [("stockview:model:OLD1", 1.0), ("stockview:model:OLD2", 2.0)]
+
+    with patch.object(cache, "get_redis_client", return_value=mock_redis):
+        c = TTLCache(ttl_seconds=30, name="model")
+        c._guard_memory_limit(mock_redis, max_threshold=0.75)
+
+        # Should have pruned oldest entries
+        assert mock_redis.zpopmin.called
+        mock_redis.delete.assert_called_with("stockview:model:OLD1", "stockview:model:OLD2")
+

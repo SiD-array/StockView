@@ -1,12 +1,14 @@
 """
-Hybrid TTL Cache with Redis support and in-memory fallback.
+Hybrid TTL Cache with Redis support, strict retention limits, and automatic LRU eviction.
 
-Behavior:
-  - If REDIS_URL is configured and reachable, data is stored in Redis so it
-    survives process restarts and Render spin-downs.
-  - If REDIS_URL is not set or Redis is temporarily down, it transparently
-    falls back to an in-memory thread-safe TTL cache. The application never
-    crashes due to cache issues.
+Features:
+  1. Time-bounded retention: Every key has a hard expiration in Redis (default max 24 hours),
+     so old data is automatically purged by Redis.
+  2. LRU size cap: Each cache namespace enforces a maximum number of entries (max_size).
+     When exceeded, the oldest accessed keys are proactively deleted.
+  3. Memory safety guard: If Redis memory usage approaches max capacity (> 75%),
+     it proactively evicts the oldest entries to prevent Out-Of-Memory errors.
+  4. Resilient fallback: If Redis is absent or fails, falls back to memory safely.
 """
 
 import pickle
@@ -43,7 +45,6 @@ def get_redis_client():
                 socket_connect_timeout=2.0,
                 decode_responses=False,  # raw bytes for pickle
             )
-            # Test connection
             client.ping()
             _redis_client = client
             print("[cache] Connected to Redis successfully.")
@@ -99,27 +100,77 @@ class MemoryTTLCache:
 
 class TTLCache:
     """
-    Hybrid TTL Cache:
+    Hybrid TTL Cache with hard time bounds and proactive LRU eviction:
       - Uses Redis if REDIS_URL is reachable.
       - Uses MemoryTTLCache if Redis is unavailable.
     """
 
-    def __init__(self, ttl_seconds: int = 3600, max_size: int = 128, name: str = "default"):
+    def __init__(
+        self,
+        ttl_seconds: int = 3600,
+        max_size: int = 128,
+        name: str = "default",
+        max_stale_seconds: int | None = None,
+    ):
         self.ttl_seconds = ttl_seconds
         self.max_size = max_size
         self.name = name
+        # Maximum duration data can stay in Redis before being permanently purged
+        # (defaults to 10x TTL, capped between 5 mins and 24 hours)
+        self.max_stale_seconds = max_stale_seconds or max(
+            min(self.ttl_seconds * 10, 86400),  # up to 24h
+            300,  # at least 5 mins
+        )
         self._memory = MemoryTTLCache(ttl_seconds=ttl_seconds, max_size=max_size)
 
     def _redis_key(self, key: str) -> str:
         return f"stockview:{self.name}:{key}"
 
+    def _index_key(self) -> str:
+        return f"stockview:idx:{self.name}"
+
+    def _evict_oldest_in_redis(self, client) -> None:
+        """Evict oldest entries if total keys in this namespace exceed max_size."""
+        try:
+            idx = self._index_key()
+            current_count = client.zcard(idx)
+            if current_count > self.max_size:
+                excess = current_count - self.max_size
+                # Pop the oldest accessed keys
+                oldest_items = client.zpopmin(idx, excess)
+                if oldest_items:
+                    keys_to_del = [item[0] for item in oldest_items]
+                    client.delete(*keys_to_del)
+        except Exception as exc:
+            print(f"[cache] Redis LRU eviction notice ({exc}).")
+
+    def _guard_memory_limit(self, client, max_threshold: float = 0.75) -> None:
+        """If Redis memory exceeds max_threshold (75%), proactively prune oldest keys."""
+        try:
+            info = client.info("memory")
+            used = info.get("used_memory", 0)
+            max_mem = info.get("maxmemory", 0)
+            if max_mem > 0 and (used / max_mem) > max_threshold:
+                print(f"[cache] Redis memory at {used / max_mem:.1%}; pruning oldest items.")
+                idx = self._index_key()
+                # Prune oldest 25% of entries in this namespace
+                count = max(1, client.zcard(idx) // 4)
+                oldest_items = client.zpopmin(idx, count)
+                if oldest_items:
+                    client.delete(*[item[0] for item in oldest_items])
+        except Exception:
+            pass
+
     def get(self, key: str) -> Any | None:
         client = get_redis_client()
         if client is not None:
             try:
-                raw = client.get(self._redis_key(key))
+                r_key = self._redis_key(key)
+                raw = client.get(r_key)
                 if raw is not None:
                     payload = pickle.loads(raw)
+                    # Update LRU access score
+                    client.zadd(self._index_key(), {r_key: time.time()})
                     if time.time() <= payload["expires_at"]:
                         return payload["value"]
                     return None
@@ -129,13 +180,15 @@ class TTLCache:
         return self._memory.get(key)
 
     def get_stale(self, key: str) -> Any | None:
-        """Return the last stored value, even if expired."""
+        """Return the last stored value, even if expired, provided it's within max_stale."""
         client = get_redis_client()
         if client is not None:
             try:
-                raw = client.get(self._redis_key(key))
+                r_key = self._redis_key(key)
+                raw = client.get(r_key)
                 if raw is not None:
                     payload = pickle.loads(raw)
+                    client.zadd(self._index_key(), {r_key: time.time()})
                     return payload.get("value")
             except Exception as exc:
                 print(f"[cache] Redis get_stale error ({exc}); falling back to memory.")
@@ -143,20 +196,32 @@ class TTLCache:
         return self._memory.get_stale(key)
 
     def set(self, key: str, value: Any) -> None:
-        # Always update memory for fast local reads
+        # 1. Update in-memory cache for instant local reads
         self._memory.set(key, value)
 
         client = get_redis_client()
         if client is not None:
             try:
+                # 2. Check if memory is filling up before writing
+                self._guard_memory_limit(client)
+
+                r_key = self._redis_key(key)
                 payload = {
                     "expires_at": time.time() + self.ttl_seconds,
                     "value": value,
                 }
                 raw = pickle.dumps(payload, protocol=pickle.HIGHEST_PROTOCOL)
-                # Keep stale data in Redis for up to 7 days for fallback
-                stale_ttl = max(self.ttl_seconds * 5, 86400 * 7)
-                client.set(self._redis_key(key), raw, ex=stale_ttl)
+
+                # Set hard expiration on the key so it automatically drops off
+                client.set(r_key, raw, ex=self.max_stale_seconds)
+
+                # Record key in LRU index with current timestamp
+                idx = self._index_key()
+                client.zadd(idx, {r_key: time.time()})
+                client.expire(idx, self.max_stale_seconds * 2)
+
+                # 3. Enforce max_size cap by evicting oldest keys
+                self._evict_oldest_in_redis(client)
             except Exception as exc:
                 print(f"[cache] Redis set error ({exc}); saved to memory only.")
 
@@ -169,5 +234,6 @@ class TTLCache:
                 keys = client.keys(pattern)
                 if keys:
                     client.delete(*keys)
+                client.delete(self._index_key())
             except Exception as exc:
                 print(f"[cache] Redis clear error ({exc}).")
