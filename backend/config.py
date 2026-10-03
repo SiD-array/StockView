@@ -30,7 +30,11 @@ def get_finnhub_api_key() -> str:
 
 def get_redis_url() -> str:
     """Redis URL (e.g. rediss://default:xxx@...upstash.io:6379)."""
-    return os.environ.get("REDIS_URL", "").strip().strip('"').strip("'")
+    url = os.environ.get("REDIS_URL", "").strip().strip('"').strip("'")
+    # Upstash requires TLS/SSL (rediss://). If redis:// was copied, auto-upgrade it.
+    if url.startswith("redis://") and "upstash.io" in url:
+        url = "rediss://" + url[len("redis://"):]
+    return url
 
 QUOTE_CACHE_TTL_SECONDS = int(os.environ.get("QUOTE_CACHE_TTL_SECONDS", "30"))
 NEWS_CACHE_TTL_SECONDS = int(os.environ.get("NEWS_CACHE_TTL_SECONDS", "600"))
