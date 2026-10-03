@@ -262,15 +262,22 @@ function App() {
         fetch(`${API_URL}/history?symbol=${symbolOverride}&range=${selectedRange}&interval=${selectedInterval}`)
       ]);
 
-      if (!priceRes.ok) {
-        const errorText = await priceRes.text();
-        throw new Error(`API Error: ${priceRes.status} - ${errorText || 'Stock not found'}`);
-      }
+      const toApiError = async (res, fallback) => {
+        let detail = fallback;
+        try {
+          const body = await res.json();
+          detail = body?.detail || fallback;
+        } catch {
+          // non-JSON body, keep fallback
+        }
+        if (res.status === 429) {
+          return new Error("Market data is temporarily rate limited. Please wait a minute and try again.");
+        }
+        return new Error(`API Error: ${res.status} - ${detail}`);
+      };
 
-      if (!chartRes.ok) {
-        const errorText = await chartRes.text();
-        throw new Error(`API Error: ${chartRes.status} - ${errorText || 'Chart data not found'}`);
-      }
+      if (!priceRes.ok) throw await toApiError(priceRes, 'Stock not found');
+      if (!chartRes.ok) throw await toApiError(chartRes, 'Chart data not found');
 
       const newPrice = await priceRes.json();
       const newChart = await chartRes.json();

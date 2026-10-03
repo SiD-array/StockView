@@ -3,8 +3,6 @@
 import os
 from pathlib import Path
 
-# yfinance must be configured before import
-os.environ.setdefault("YFINANCE_DISABLE_CURL_CFFI", "1")
 
 # Load backend/.env for local development (Render/Vercel use dashboard env vars)
 _env_path = Path(__file__).resolve().parent / ".env"
@@ -40,6 +38,7 @@ MIN_FEATURE_ROWS = 30
 
 MODEL_CACHE_TTL_SECONDS = int(os.environ.get("MODEL_CACHE_TTL_SECONDS", "3600"))
 DATA_CACHE_TTL_SECONDS = int(os.environ.get("DATA_CACHE_TTL_SECONDS", "300"))
+COMPANY_NAME_CACHE_TTL_SECONDS = int(os.environ.get("COMPANY_NAME_CACHE_TTL_SECONDS", "86400"))
 
 VALID_ALGORITHMS = [
     "linear_regression",

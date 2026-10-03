@@ -7,14 +7,13 @@ REST API for stock data, ML predictions, news sentiment, and model evaluation.
 import os
 import traceback
 
-os.environ.setdefault("YFINANCE_DISABLE_CURL_CFFI", "1")
-
 import pandas as pd  # type: ignore
 import requests  # type: ignore
 import warnings
 from fastapi import FastAPI, HTTPException  # type: ignore
 from fastapi.middleware.cors import CORSMiddleware  # type: ignore
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer  # type: ignore
+from yfinance.exceptions import YFRateLimitError  # type: ignore
 
 from cache import TTLCache
 from config import (
@@ -24,7 +23,7 @@ from config import (
     VALID_ALGORITHMS,
     get_news_api_key,
 )
-from data import download_stock_data
+from data import UpstreamRateLimitError, download_stock_data, get_company_name
 from features import prepare_features
 from models.prediction import (
     predict_multi_step_cnn,
@@ -61,6 +60,13 @@ def period_key(data: pd.DataFrame) -> str:
 
 
 def _log_and_raise(endpoint: str, exc: Exception) -> None:
+    if isinstance(exc, (UpstreamRateLimitError, YFRateLimitError)):
+        print(f"Rate limited in {endpoint}: {exc}")
+        raise HTTPException(
+            status_code=429,
+            detail="Market data provider is rate limiting requests. Please try again in a minute.",
+            headers={"Retry-After": "60"},
+        )
     print(f"Error in {endpoint}: {exc}")
     print(traceback.format_exc())
     raise HTTPException(status_code=500, detail=str(exc))
@@ -140,26 +146,28 @@ def health_check():
 @app.get("/price")
 def get_price(symbol: str):
     try:
-        import yfinance as yf  # type: ignore
-
-        stock = yf.Ticker(symbol)
-        data = stock.history(period="1d")
-        info = stock.info
-        company_name = info.get("longName", symbol)
-
-        if data.empty:
-            raise HTTPException(status_code=404, detail="Stock symbol not found")
-
+        # Reuse the cached history pipeline (5d covers weekends/holidays)
+        # instead of hitting Yahoo on every request.
+        data = download_stock_data(symbol, period="5d", interval="1d", min_rows=1)
         latest = data.iloc[-1]
+        prev_close = float(data["Close"].iloc[-2]) if len(data) > 1 else None
+        price = float(latest["Close"])
+
         return {
-            "company": company_name,
+            "company": get_company_name(symbol),
             "symbol": symbol.upper(),
-            "price": round(latest["Close"], 2),
-            "open": round(latest["Open"], 2),
-            "high": round(latest["High"], 2),
-            "low": round(latest["Low"], 2),
+            "price": round(price, 2),
+            "open": round(float(latest["Open"]), 2),
+            "high": round(float(latest["High"]), 2),
+            "low": round(float(latest["Low"]), 2),
             "volume": int(latest["Volume"]),
+            "previous_close": round(prev_close, 2) if prev_close else None,
+            "change_percent": round((price - prev_close) / prev_close * 100, 2)
+            if prev_close
+            else None,
         }
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Stock symbol not found")
     except HTTPException:
         raise
     except Exception as exc:

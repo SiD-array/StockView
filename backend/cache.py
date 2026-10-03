@@ -21,9 +21,16 @@ class TTLCache:
                 return None
             expires_at, value = entry
             if time.time() > expires_at:
-                del self._store[key]
+                # Keep the expired entry around so it can be served via
+                # get_stale() if the upstream provider is unavailable.
                 return None
             return value
+
+    def get_stale(self, key: str) -> Any | None:
+        """Return the last stored value for key, even if it has expired."""
+        with self._lock:
+            entry = self._store.get(key)
+            return entry[1] if entry is not None else None
 
     def set(self, key: str, value: Any) -> None:
         with self._lock:
