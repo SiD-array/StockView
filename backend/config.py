@@ -22,6 +22,14 @@ def get_news_api_key() -> str:
     """Read NEWS_API_KEY at call time so Render env updates apply after redeploy."""
     return os.environ.get("NEWS_API_KEY", "").strip().strip('"').strip("'")
 
+
+def get_finnhub_api_key() -> str:
+    """Finnhub key (quotes, company profile, company news). Free at finnhub.io."""
+    return os.environ.get("FINNHUB_API_KEY", "").strip().strip('"').strip("'")
+
+QUOTE_CACHE_TTL_SECONDS = int(os.environ.get("QUOTE_CACHE_TTL_SECONDS", "30"))
+NEWS_CACHE_TTL_SECONDS = int(os.environ.get("NEWS_CACHE_TTL_SECONDS", "600"))
+
 # Comma-separated origins, e.g. "https://stock-view-ebon.vercel.app,http://localhost:5173"
 CORS_ORIGINS = [
     origin.strip()

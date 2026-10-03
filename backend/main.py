@@ -19,11 +19,14 @@ from cache import TTLCache
 from config import (
     CORS_ORIGINS,
     MODEL_CACHE_TTL_SECONDS,
+    NEWS_CACHE_TTL_SECONDS,
     NEWS_URL,
     VALID_ALGORITHMS,
     get_news_api_key,
 )
-from data import UpstreamRateLimitError, download_stock_data, get_company_name
+from data import download_stock_data, get_company_name, get_quote
+from errors import ProviderError, UpstreamRateLimitError
+from providers import finnhub
 from features import prepare_features
 from models.prediction import (
     predict_multi_step_cnn,
@@ -53,6 +56,8 @@ app.add_middleware(
 )
 
 _model_cache = TTLCache(ttl_seconds=MODEL_CACHE_TTL_SECONDS)
+_news_cache = TTLCache(ttl_seconds=NEWS_CACHE_TTL_SECONDS, max_size=256)
+_sentiment = SentimentIntensityAnalyzer()
 
 
 def period_key(data: pd.DataFrame) -> str:
@@ -67,6 +72,9 @@ def _log_and_raise(endpoint: str, exc: Exception) -> None:
             detail="Market data provider is rate limiting requests. Please try again in a minute.",
             headers={"Retry-After": "60"},
         )
+    if isinstance(exc, ProviderError):
+        print(f"Provider error in {endpoint}: {exc}")
+        raise HTTPException(status_code=502, detail=str(exc))
     print(f"Error in {endpoint}: {exc}")
     print(traceback.format_exc())
     raise HTTPException(status_code=500, detail=str(exc))
@@ -134,37 +142,39 @@ def _compare_all_algorithms(data: pd.DataFrame, X, y) -> dict:
 
 @app.get("/")
 def health_check():
-    news_key = get_news_api_key()
     return {
         "status": "healthy",
         "message": "StockView API is running",
-        "news_configured": bool(news_key),
-        "news_url": NEWS_URL,
+        "providers": {
+            "quotes": "finnhub" if finnhub.is_configured() else "yfinance",
+            "history": "yfinance",
+            "news": "finnhub"
+            if finnhub.is_configured()
+            else ("newsapi" if get_news_api_key() else None),
+        },
     }
 
 
 @app.get("/price")
 def get_price(symbol: str):
     try:
-        # Reuse the cached history pipeline (5d covers weekends/holidays)
-        # instead of hitting Yahoo on every request.
-        data = download_stock_data(symbol, period="5d", interval="1d", min_rows=1)
-        latest = data.iloc[-1]
-        prev_close = float(data["Close"].iloc[-2]) if len(data) > 1 else None
-        price = float(latest["Close"])
+        quote = get_quote(symbol)
+
+        def r(value):
+            return round(float(value), 2) if value is not None else None
 
         return {
             "company": get_company_name(symbol),
             "symbol": symbol.upper(),
-            "price": round(price, 2),
-            "open": round(float(latest["Open"]), 2),
-            "high": round(float(latest["High"]), 2),
-            "low": round(float(latest["Low"]), 2),
-            "volume": int(latest["Volume"]),
-            "previous_close": round(prev_close, 2) if prev_close else None,
-            "change_percent": round((price - prev_close) / prev_close * 100, 2)
-            if prev_close
-            else None,
+            "price": r(quote["price"]),
+            "open": r(quote["open"]),
+            "high": r(quote["high"]),
+            "low": r(quote["low"]),
+            "volume": quote.get("volume"),
+            "previous_close": r(quote.get("previous_close")),
+            "change": r(quote.get("change")),
+            "change_percent": r(quote.get("change_percent")),
+            "source": quote.get("source"),
         }
     except ValueError:
         raise HTTPException(status_code=404, detail="Stock symbol not found")
@@ -225,70 +235,113 @@ def get_history(symbol: str, range: str = "1d", interval: str = "5m"):
         _log_and_raise("get_history", exc)
 
 
+def _score_sentiment(text: str) -> tuple[str, float]:
+    """VADER compound score in [-1, 1] mapped to a label."""
+    score = _sentiment.polarity_scores(text)["compound"]
+    if score > 0.2:
+        return "Positive", score
+    if score < -0.2:
+        return "Negative", score
+    return "Neutral", score
+
+
+def _news_from_finnhub(symbol: str, limit: int) -> list[dict]:
+    articles = finnhub.get_company_news(symbol, days=7, limit=limit)
+    return [
+        {
+            "headline": a["headline"],
+            "summary": a["summary"],
+            "url": a["url"],
+            "source": a["source"],
+            "published_at": pd.Timestamp(a["published_at_unix"], unit="s", tz="UTC").isoformat(),
+        }
+        for a in articles
+    ]
+
+
+def _news_from_newsapi(symbol: str, limit: int) -> list[dict]:
+    params = {
+        "q": symbol,
+        "sortBy": "publishedAt",
+        "language": "en",
+        "pageSize": limit,
+        "apiKey": get_news_api_key(),
+    }
+    response = requests.get(NEWS_URL, params=params, timeout=10)
+    if response.status_code != 200:
+        detail = "News API error"
+        try:
+            body = response.json()
+            detail = body.get("message", body.get("code", detail))
+        except Exception:
+            detail = response.text or detail
+
+        if response.status_code == 426:
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    "NewsAPI free Developer plan cannot be used on production servers "
+                    f"(NewsAPI: {detail}). Set FINNHUB_API_KEY to use Finnhub company news instead."
+                ),
+            )
+        raise HTTPException(status_code=response.status_code, detail=detail)
+
+    return [
+        {
+            "headline": a["title"],
+            "summary": a.get("description") or "",
+            "url": a["url"],
+            "source": (a.get("source") or {}).get("name", ""),
+            "published_at": a["publishedAt"],
+        }
+        for a in response.json().get("articles", [])
+        if a.get("title")
+    ]
+
+
 @app.get("/news")
 def get_news(symbol: str, limit: int = 5):
-    api_key = get_news_api_key()
-    if not api_key:
+    """Ticker news with sentiment. Finnhub if configured, else NewsAPI."""
+    symbol = symbol.upper().strip()
+    limit = max(1, min(limit, 20))
+
+    cache_key = f"{symbol}:{limit}"
+    cached = _news_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    use_finnhub = finnhub.is_configured()
+    if not use_finnhub and not get_news_api_key():
         raise HTTPException(
             status_code=503,
-            detail=(
-                "News API is not configured. Set NEWS_API_KEY in Render Environment, "
-                "then click Manual Deploy → Deploy latest commit."
-            ),
+            detail="News is not configured. Set FINNHUB_API_KEY (recommended) or NEWS_API_KEY.",
         )
 
     try:
-        params = {
-            "q": symbol,
-            "sortBy": "publishedAt",
-            "language": "en",
-            "pageSize": limit,
-            "apiKey": api_key,
+        if use_finnhub:
+            articles = _news_from_finnhub(symbol, limit)
+        else:
+            articles = _news_from_newsapi(symbol, limit)
+
+        for article in articles:
+            label, score = _score_sentiment(article["headline"])
+            article["sentiment"] = label
+            article["sentiment_score"] = score
+
+        result = {
+            "symbol": symbol,
+            "source": "finnhub" if use_finnhub else "newsapi",
+            "news": articles,
         }
-        response = requests.get(NEWS_URL, params=params, timeout=10)
-        if response.status_code != 200:
-            detail = "News API error"
-            try:
-                body = response.json()
-                detail = body.get("message", body.get("code", detail))
-            except Exception:
-                detail = response.text or detail
-
-            if response.status_code == 426:
-                raise HTTPException(
-                    status_code=503,
-                    detail=(
-                        "NewsAPI free Developer plan cannot be used on production servers "
-                        f"(NewsAPI: {detail}). Use localhost for news, upgrade at newsapi.org/pricing, "
-                        "or switch to a production-ready news provider."
-                    ),
-                )
-
-            raise HTTPException(status_code=response.status_code, detail=detail)
-
-        analyzer = SentimentIntensityAnalyzer()
-        news_data = []
-        for article in response.json().get("articles", []):
-            headline = article["title"]
-            sentiment_score = analyzer.polarity_scores(headline)["compound"]
-            if sentiment_score > 0.2:
-                sentiment = "Positive"
-            elif sentiment_score < -0.2:
-                sentiment = "Negative"
-            else:
-                sentiment = "Neutral"
-
-            news_data.append({
-                "headline": headline,
-                "url": article["url"],
-                "published_at": article["publishedAt"],
-                "sentiment": sentiment,
-                "sentiment_score": sentiment_score,
-            })
-
-        return {"symbol": symbol, "news": news_data}
+        _news_cache.set(cache_key, result)
+        return result
     except HTTPException:
         raise
+    except (ProviderError, UpstreamRateLimitError) as exc:
+        stale = _news_cache.get_stale(cache_key)
+        if stale is not None:
+            return stale
+        _log_and_raise("get_news", exc)
     except Exception as exc:
         _log_and_raise("get_news", exc)
 
